@@ -96,46 +96,53 @@ def match():
 @bp.get("/export")
 @perm_required("person.view")
 def export():
-    """按街道下发模板导出。文件名带日期，社区每月报一次。"""
+    """按街道下发模板导出。文件名带日期，社区每月报一次。
+
+    用自研 `app/xlsx.py` 而非 openpyxl：线上托管环境的依赖不能确定，
+    openpyxl 体量大、又不在 requirements 里，缺了会让导出直接 500
+    （2026-11-03 线上就因此全灭）。自研写入器零依赖，格式坑已处理过。
+    """
     import io
     from datetime import datetime
 
-    import openpyxl
-    from openpyxl.styles import Alignment, Font
+    from app.xlsx import Workbook, styles
 
     kind = request.args.get("kind", "")
     spec, header, rows = export_rows(current_user(), kind)
     if spec is None:
         return fail("未知的导出类型：%s" % kind), 400
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Sheet1"
+    wb = Workbook()
     ncol = len(header)
+    sh = wb.add("Sheet1")
 
     # 大标题行合并（下发模板都是这样：第 1 行整行合并写表名）
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncol)
-    c = ws.cell(row=1, column=1, value=spec["title"])
-    c.font = Font(bold=True, size=14)
-    c.alignment = Alignment(horizontal="center", vertical="center")
+    last_col = _col_name(ncol)
+    sh.merge(f"A1:{last_col}1")
+    sh.cell(1, 1, spec["title"], styles.title)
 
     # 表头从 spec 指定的行开始（残疾人/防溺水是第 2 行，留守儿童是第 3 行——
     # 后者上面还有一行空白，原表如此，照抄才和街道的模板对得上）
     hrow = spec["header_row"]
     for i, name in enumerate(header, start=1):
-        cell = ws.cell(row=hrow, column=i, value=name)
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal="center", vertical="center",
-                                   wrap_text=True)
+        sh.cell(hrow, i, name, styles.head)
     for r, row in enumerate(rows, start=hrow + 1):
         for i, v in enumerate(row, start=1):
-            ws.cell(row=r, column=i, value=v)
+            sh.cell(r, i, v)
 
-    buf = io.BytesIO()
-    wb.save(buf)
+    buf = io.BytesIO(wb.to_bytes())
     buf.seek(0)
     stamp = datetime.now().strftime("%Y%m%d")
     fname = "%s_%s.xlsx" % (spec["title"], stamp)
     return send_file(buf, as_attachment=True, download_name=fname,
                      mimetype="application/vnd.openxmlformats-officedocument"
                               ".spreadsheetml.sheet")
+
+
+def _col_name(n: int) -> str:
+    """列号 → Excel 列名（1→A, 26→Z, 27→AA）。"""
+    s = ""
+    while n:
+        n, r = divmod(n - 1, 26)
+        s = chr(65 + r) + s
+    return s
