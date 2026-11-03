@@ -18,7 +18,7 @@ security.run() → parser.run() → for item: dispatch.run() / fill.run() → co
 
 | 问题 | 事实 | 后果 |
 |---|---|---|
-| Agent 大多是规则 | 7 个 Agent（parser/dispatch/fill/knowledge/security/supervise/report）里只有 **2 个**调大模型 | 「7 个 Agent」名不副实 |
+| Agent 大多是规则 | 8 个 Agent（parser/dispatch/fill/knowledge/security/supervise/report/riskreview）里只有 **2 个**调大模型 | 「8 个 Agent」里 6 个是规则，名不副实 |
 | 没有交互 | 把 `dispatch.run()` 换成普通函数调用，系统行为一行都不变 | 「协作」二字无意义 |
 | 过程不留痕 | `audit_log` 只存 250 字摘要，页面上看不到「谁定的、依据是什么」 | 说不清「多主体强在哪」 |
 
@@ -109,7 +109,7 @@ res = bb.resolve("sla")              # 消解：有分歧才产生记录
 → 采纳「紧急 4h」。规则：合规要求只能加严，不能放宽。
 ```
 
-系统里 7 个 Agent，5 个是规则实现。把它们做成多数表决没有意义：
+系统里 8 个 Agent，6 个是规则实现。把它们做成多数表决没有意义：
 规则 Agent 会互相印证同一次词表命中，票数只反映谁的词表更长。
 
 更关键的是**制度上不成立**：如果按票数，两张 72 小时的宽松结论会压过
@@ -281,8 +281,8 @@ reason / topic / took_ms / degraded / fde_id / work_item_id / order_no`
 
 ## 10. 能力边界（写论文别越界）
 
-1. **只有 2 个 Agent 调模型**（parser / knowledge），另外 5 个是规则。
-   说「7 个 Agent 全部由大模型驱动」不成立。
+1. **只有 2 个 Agent 调模型**（parser / knowledge），另外 6 个是规则。
+   说「8 个 Agent 全部由大模型驱动」不成立。
 2. **只有一个消解议题（SLA 时限）**。曾经想加「密级」和「是否督办」，
    但前者两个 Agent 并不矛盾（做了就是伪造分歧），后者没有任何 Agent 会表态
    （做了就是自说自话）。议题表里只留真实存在的分歧。
@@ -323,7 +323,7 @@ reason / topic / took_ms / degraded / fde_id / work_item_id / order_no`
 
 ## 12. 答辩预演问答
 
-**Q：7 个 Agent 都用大模型吗？**
+**Q：8 个 Agent 都用大模型吗？**
 A：2 个用（拆解、政策问答），5 个是规则。这是刻意的：派单定级、脱敏、
 填报这些事有明确规范，用模型反而不稳定也不可解释。文档里的消融实验
 （docs/03）就是在量化「哪些环节换成模型是加分的」。

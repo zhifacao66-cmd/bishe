@@ -199,18 +199,34 @@ def group_b():
 # ---------------------------------------------------------------- C 权限
 
 GUARDS = {"perm_required", "login_required"}
-# 这些路由本来就该公开：登录/登出/探活/居民端（凭手机号+查询码，无系统账号）
+# 这些路由本来就该公开：登录/登出/探活/居民端（凭手机号+查询码，无系统账号）。
+# 白名单必须**「文件:函数」精确匹配**：`report`/`notices`/`contacts`/`health`/`me`
+# 在 api/ 与页面层是同名函数，按裸函数名放行等于给同名路由开后门。
 PUBLIC_OK = {
-    "login", "logout", "health", "ping", "dbwrite", "register",
-    "report", "query_ticket", "my_tickets", "ticket_detail",
-    "notices", "contacts", "roles", "me",
+    ("app/views.py", "login"), ("app/views.py", "logout"),
+    ("app/views.py", "health"), ("app/views.py", "notices"),
+    ("app/admin.py", "register"),
+    ("app/api/admin.py", "me"),
+    ("app/api/health.py", "health"), ("app/api/health.py", "ping"),
+    ("app/api/health.py", "dbwrite"),
+    ("app/api/portal.py", "report"), ("app/api/portal.py", "query_ticket"),
+    ("app/api/portal.py", "my_tickets"), ("app/api/portal.py", "ticket_detail"),
+    ("app/api/portal.py", "notices"), ("app/api/portal.py", "contacts"),
+    ("app/api/portal.py", "roles"),
+    ("app/portal.py", "report"), ("app/portal.py", "query"),
+    ("app/portal.py", "notices"), ("app/portal.py", "contacts"),
 }
 
 
 def _routes():
-    """AST 解析所有路由函数：名字、文件、行号、是否有装饰器守卫、函数体是否有内联守卫"""
+    """AST 解析所有路由函数：名字、文件、行号、是否有装饰器守卫、函数体是否有内联守卫
+
+    必须扫 `app/**/*.py` 全量：早先只扫 `app/api/*.py` + views.py + admin.py，
+    漏掉了 `app/portal.py`（居民端 9 条）与 `@bp.patch`（3 条改状态的接口）——
+    134 条路由里只复核了 122 条，等于给"裸路由 0"一个假的确定性。
+    """
     rows = []
-    for p in list((ROOT / "app" / "api").glob("*.py")) + [ROOT / "app" / "views.py", ROOT / "app" / "admin.py"]:
+    for p in sorted((ROOT / "app").rglob("*.py")):
         if not p.exists():
             continue
         src = p.read_text(encoding="utf-8", errors="replace")
@@ -227,7 +243,7 @@ def _routes():
                 f = d.func if isinstance(d, ast.Call) else d
                 decos.append((getattr(f, "attr", None) or getattr(f, "id", ""), d))
             names = [n for n, _ in decos]
-            if not any(n in ("get", "post", "route", "put", "delete") for n in names):
+            if not any(n in ("get", "post", "route", "put", "delete", "patch") for n in names):
                 continue
             perms = []
             for n, d in decos:
@@ -248,7 +264,9 @@ def _routes():
 
 def group_c():
     rows = _routes()
-    naked = [r for r in rows if not r["guarded"] and not r["inline"] and r["func"] not in PUBLIC_OK]
+    def _pub(r):
+        return (r["file"].replace("\\", "/"), r["func"]) in PUBLIC_OK
+    naked = [r for r in rows if not r["guarded"] and not r["inline"] and not _pub(r)]
     add("C", "C1 路由权限覆盖", PASS if not naked else FAIL,
         f"{len(rows)} 个路由，装饰器守卫 {sum(1 for r in rows if r['guarded'])}，"
         f"内联守卫 {sum(1 for r in rows if not r['guarded'] and r['inline'])}，裸路由 {len(naked)}"
