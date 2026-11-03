@@ -242,7 +242,14 @@ function load() {
     d.items.forEach(function (n) {
       var ops = ['<a class="btn btn-ghost" style="text-decoration:none;padding:5px 10px" href="' + detailHref(n.id) + '">查看</a>'];
       {% if can('notice.manage') %}
-      if (n.status === 'pending') ops.push('<button class="btn btn-primary" style="padding:5px 10px" onclick="act(' + n.id + ',\'publish\')">发布</button>');
+      if (n.status === 'pending') {
+        // 发布要求标题与发文单位都不为空（notice/ingest.publish）。解析失败的那条
+        // issuer 是空的，直接给"发布"必然被拒，而补字段的 PATCH 接口原先没有入口——
+        // 于是这份公告永远发不出去。缺字段时先给"补发文单位"，补完自动接着发布。
+        ops.push(n.issuer
+          ? '<button class="btn btn-primary" style="padding:5px 10px" onclick="act(' + n.id + ',\'publish\')">发布</button>'
+          : '<button class="btn btn-primary" style="padding:5px 10px" onclick="fixIssuer(' + n.id + ')" title="发布要求标题与发文单位不为空，先补发文单位">补发文单位</button>');
+      }
       if (n.status === 'published') ops.push('<button class="btn btn-ghost" style="padding:5px 10px" onclick="act(' + n.id + ',\'offline\')">下架</button>');
       // 置顶是同一权限点（通知公告的口径由属地社区背书），放在发布/下架之后，
       // 顺序也表达优先级：先决定发不发，再决定谁排前面
@@ -352,6 +359,21 @@ function msgOf(j) {
 }
 function act(id, what) {
   api('/api/notices/' + id + '/' + what, { method: 'POST' }).then(j => { alert(msgOf(j)); load(); });
+}
+// 补发文单位 → 补完自动发布。PATCH /api/notices/<id> 本来就是"补全字段"的
+// 接口（后端注释就写着"补完即可发布"），只是此前前端一直没有入口。
+function fixIssuer(id) {
+  var v = prompt('这份公告缺"发文单位"，发布前必须补上。\n请填写发文单位（例：幸福里街道办事处）：');
+  if (v === null) return;
+  v = (v || '').trim();
+  if (!v) { alert('发文单位不能为空'); return; }
+  api('/api/notices/' + id, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ issuer: v })
+  }).then(function (j) {
+    if (j.code !== 0) { alert(msgOf(j)); return; }
+    act(id, 'publish');
+  }).catch(function (e) { alert(e.message || '补全失败'); });
 }
 function markFilter() {
   document.querySelectorAll('[data-filter]').forEach(function (b) {

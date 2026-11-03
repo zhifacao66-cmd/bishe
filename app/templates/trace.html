@@ -185,24 +185,38 @@ function renderTrace(d) {
 }
 
 function loadStats() {
-  api('/api/collab/stats').then(function (r) { renderStats(r.data); })
-    .fail(function (e) { toast(e.message || '统计加载失败', 'err'); });
+  api('/api/collab/stats').then(function (r) {
+    if (r.code !== 0) { toast((r.data && r.data.msg) || r.msg || '统计加载失败', 'err'); return; }
+    renderStats(r.data);
+  }).catch(function (e) { toast(e.message || '统计加载失败', 'err'); });
 }
 
 function loadRuns() {
-  api('/api/collab/runs?limit=40').then(function (r) { renderRuns(r.data); })
-    .fail(function (e) {
-      toast(e.message || '运行列表加载失败', 'err');
+  api('/api/collab/runs?limit=40').then(function (r) {
+    if (r.code !== 0) {
+      toast((r.data && r.data.msg) || r.msg || '运行列表加载失败', 'err');
       document.getElementById('runList').innerHTML =
-        '<div class="empty">加载失败。' + esc(e.message || '') + '</div>';
-    });
+        '<div class="empty">加载失败。' + esc((r.data && r.data.msg) || r.msg || '') + '</div>';
+      return;
+    }
+    renderRuns(r.data);
+  }).catch(function (e) {
+    toast(e.message || '运行列表加载失败', 'err');
+    document.getElementById('runList').innerHTML =
+      '<div class="empty">加载失败。' + esc(e.message || '') + '</div>';
+  });
 }
 
 function loadTrace(runId) {
   document.getElementById('traceBody').innerHTML = '<div class="empty">加载中…</div>';
   api('/api/collab/trace?run_id=' + encodeURIComponent(runId)).then(function (r) {
+    if (r.code !== 0) {
+      document.getElementById('traceBody').innerHTML =
+        '<div class="empty">' + esc((r.data && r.data.msg) || r.msg || '轨迹加载失败') + '</div>';
+      return;
+    }
     renderTrace(r.data);
-  }).fail(function (e) {
+  }).catch(function (e) {
     document.getElementById('traceBody').innerHTML =
       '<div class="empty">' + esc(e.message || '轨迹加载失败') + '</div>';
   });

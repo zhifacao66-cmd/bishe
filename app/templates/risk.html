@@ -290,14 +290,36 @@ function renderTopics(d) {
 }
 
 function load() {
-  api('/api/insight/risk').then(function (r) { D = r.data; renderRisk(D); })
-    .fail(function (e) { toast(e.message || '预警数据加载失败', 'err'); });
-  api('/api/insight/topics').then(function (r) { T = r.data; renderTopics(T); })
-    .fail(function (e) {
+  api('/api/insight/risk').then(function (r) {
+    if (r.code !== 0) { toast((r.data && r.data.msg) || r.msg || '预警数据加载失败', 'err'); return; }
+    D = r.data; renderRisk(D);
+    // 居民诉求原文是否可见由后端判定（with_people 与 /api/insight/topics 同一条规则），
+    // 前端不再自己猜角色：物业拿到 false 就说明白，不去请求一个必定 403 的接口
+    if (D.with_people === false) {
       document.getElementById('hotBody').innerHTML =
-        '<tr><td colspan="5" class="na">' + esc(e.message || '热点数据不可用') + '</td></tr>';
+        '<tr><td colspan="5" class="na">本角色不展示居民诉求原文（含邻里纠纷、家庭困难等），仅社区、街道与管理员可查看</td></tr>';
       document.getElementById('cluBody').innerHTML = '<tr><td colspan="3" class="na">—</td></tr>';
-    });
+    } else {
+      loadTopics();
+    }
+  }).catch(function (e) { toast(e.message || '预警数据加载失败', 'err'); });
+}
+
+function loadTopics() {
+  api('/api/insight/topics').then(function (r) {
+    if (r.code !== 0) {
+      var why = (r.data && r.data.msg) || r.msg || '热点数据不可用';
+      document.getElementById('hotBody').innerHTML =
+        '<tr><td colspan="5" class="na">' + esc(why) + '</td></tr>';
+      document.getElementById('cluBody').innerHTML = '<tr><td colspan="3" class="na">—</td></tr>';
+      return;
+    }
+    T = r.data; renderTopics(T);
+  }).catch(function (e) {
+    document.getElementById('hotBody').innerHTML =
+      '<tr><td colspan="5" class="na">' + esc(e.message || '热点数据不可用') + '</td></tr>';
+    document.getElementById('cluBody').innerHTML = '<tr><td colspan="3" class="na">—</td></tr>';
+  });
 }
 
 document.addEventListener('DOMContentLoaded', function () {

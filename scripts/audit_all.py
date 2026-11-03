@@ -453,6 +453,31 @@ def group_d():
         "0 处裸 fetch" if not bare else f"{len(bare)} 处裸 fetch：" + "、".join(bare[:5]),
         "统一入口才有 60s 超时、非 JSON 归一、通道失败提示")
 
+    # api() 返回的是 fetch 的原生 Promise，没有 jQuery 的 .fail()。
+    # 写成 api(...).then(...).fail(...) 会在"链式构造"阶段就抛 TypeError，
+    # 既拿不到错误提示，同一函数里它后面的语句也全部不执行
+    # （trace 页因此永远不加载运行列表、risk 页热点表永远停在"加载中"）。
+    bad_fail = []
+    for p in sorted(tpl.rglob("*.html")):
+        for i, ln in enumerate(p.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            if re.search(r"\)\s*\.fail\s*\(", ln):
+                bad_fail.append(f"{p.name}:{i}")
+    add("D", "D4 不用原生 Promise 上没有的 .fail", PASS if not bad_fail else FAIL,
+        "0 处 .fail" if not bad_fail else f"{len(bad_fail)} 处：" + "、".join(bad_fail[:5]),
+        "api() 是原生 Promise，.fail 不存在；要 .catch，且业务失败( code!==0 )由调用方判")
+
+    # getElementById 指向不存在的 id = 空指针，表现就是"按钮点了没反应"
+    miss_id = []
+    for p in sorted(tpl.rglob("*.html")):
+        s = p.read_text(encoding="utf-8", errors="replace")
+        for m in re.finditer(r"""getElementById\(\s*['"]([\w.-]+)['"]\s*\)""", s):
+            name = m.group(1)
+            if not re.search(rf"""id\s*=\s*['"\\]*{re.escape(name)}['"\\]""", s):
+                miss_id.append(f"{p.name}→{name}")
+    add("D", "D5 getElementById 目标存在", PASS if not miss_id else FAIL,
+        "全部能找到对应元素" if not miss_id else f"{len(miss_id)} 处找不到：" + "、".join(miss_id[:6]),
+        "元素改名后残留旧 id 会空指针，页面表现为点了没反应")
+
 
 # ---------------------------------------------------------------- E 数据与流程
 

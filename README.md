@@ -295,7 +295,7 @@ python run.py                           # http://127.0.0.1:5000
 | `plot_thesis.py` | 论文架构图/时序图/减负对比图 | `python scripts/plot_thesis.py` |
 | `llm_gateway.py` | 本机模型网关：校验令牌后转发给 Ollama（公网隧道对端） | `python scripts/llm_gateway.py` |
 | `start_llm_channel.py` | 一键起"网关 + 隧道"并写入新地址（线上模型通道） | `python scripts/start_llm_channel.py` |
-| `audit_all.py` | **一键安全与流程体检**：凭据 / 会话 / 权限 / 前端 / 数据 / 线上共 24 项，有 FAIL 退出码 1 | `python scripts/audit_all.py`；线上 `--target ecs` |
+| `audit_all.py` | **一键安全与流程体检**：凭据 / 会话 / 权限 / 前端 / 数据 / 线上共 26 项，有 FAIL 退出码 1 | `python scripts/audit_all.py`；线上 `--target ecs` |
 | `backup_db.py` | 数据库备份：在线一致性快照 + 三关自检 + 轮转（可注册每日计划任务） | `python scripts/backup_db.py --install-task` |
 | `rotate_password.py` | 换掉默认口令（默认只预演，`--apply` 才真正改并验证） | `python scripts/rotate_password.py --target ecs --apply` |
 
@@ -307,7 +307,7 @@ python run.py                           # http://127.0.0.1:5000
 ### 上线 / 演示前的一次性检查
 
 ```bat
-python scripts\audit_all.py     :: 六组 24 项，几秒出结果，有 FAIL 退出码 1
+python scripts\audit_all.py     :: 六组 26 项，几秒出结果，有 FAIL 退出码 1
 python scripts\backup_db.py     :: 先留一份可恢复的快照，再动别的
 ```
 
