@@ -413,7 +413,14 @@ def cluster(n=2, min_docs=2, threshold=0.16, max_df=0.5):
             "fallback": "已改用主题词表归并（见 hotspots）+ 高频字串（见 ngrams）。",
         }
 
-    import numpy as np
+    try:
+        import numpy as np
+    except Exception:           # 线上环境可能没装 numpy（不在 requirements 里），
+        # 聚类是"锦上添花"的分析，hotspots 词表归并才是主线。
+        # 缺 numpy 就诚实降级，不能像 openpyxl 那样让接口直接 500。
+        return {"available": False, "n": total, "need": MIN_N_FOR_CLUSTER,
+                "reason": "运行环境缺少 numpy，无法做 TF-IDF 聚类。",
+                "fallback": "见 hotspots()（主题词表归并）+ ngrams（高频字串）。"}
 
     texts = [_text(t) for t in tiles]
     mat, vocab = _vectorize(texts, n=n, min_docs=min_docs, max_df=max_df)
