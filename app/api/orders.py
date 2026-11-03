@@ -194,7 +194,10 @@ def list_orders():
             q = q.filter(cond)             # assignee 可为空，NULL 不参与 OR 命中
 
     matched = q.count()
-    orders = (q.order_by(WorkOrder.created_at.desc())
+    # 排序必须带唯一键兜底：同一秒创建的多条工单 created_at 完全相同，
+    # 只按时间排时 SQLite 的返回顺序由执行计划决定（走索引/全表扫描不一样），
+    # 分页用 OFFSET 就会在页边界上重复或漏单。id 是唯一键，加它顺序就定了。
+    orders = (q.order_by(WorkOrder.created_at.desc(), WorkOrder.id.desc())
               .offset((page - 1) * limit).limit(limit).all())
 
     # 统计口径与明细同源：都在上面那个"已按单位隔离"的 base 上数。

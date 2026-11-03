@@ -214,8 +214,11 @@ def index():
     # 而页脚写着"99 / 3"，用户只会以为自己筛错了
     if page > pages:
         page = pages
+    # 末尾的 id 是分页稳定性的兜底：pinned/pinned_at 大量为 0/NULL，
+    # 退化成只按 created_at 排时，同秒创建的两条谁前谁后不确定，
+    # OFFSET 分页会在页边界重复或漏条。
     rows = (q.order_by(Notice.pinned.desc(), Notice.pinned_at.desc(),
-                       Notice.created_at.desc())
+                       Notice.created_at.desc(), Notice.id.desc())
             .offset((page - 1) * size).limit(size).all())
     prog = _local_progress([n.id for n in rows])
     # 卡片数字必须和列表同源：物业看到的"待确认"若按全表算，会出现

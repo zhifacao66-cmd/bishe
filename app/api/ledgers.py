@@ -61,7 +61,7 @@ def list_ledgers():
             q = q.filter(cond)
 
     matched = q.count()
-    items = (q.order_by(Ledger.created_at.desc())
+    items = (q.order_by(Ledger.created_at.desc(), Ledger.id.desc())
              .offset((page - 1) * limit).limit(limit).all())
 
     # 统计一律走聚合查询，且**不受 line/关键词筛选影响**：
