@@ -5,32 +5,10 @@ from app.params import safe_back
 from app.auth import (DEMO_USERS, ROLE_HOME, AccountDisabled, LoginThrottled,
                       current_user, has_perm, login as do_login,
                       logout as do_logout, login_required, perm_required)
+# 导出留痕的唯一实现在 app/exportlog.py（底册导出也要用同一份）。
+from app.exportlog import log_export as _log_export
 
 bp = Blueprint("views", __name__)
-
-
-def _log_export(kind: str, detail: str):
-    """导出留痕：谁、什么时候、把哪份文件拿走了
-
-    下载是最容易"查不到人"的动作——页面刷了有访问日志，文件存到本地之后
-    就没有任何痕迹了。所以导出前先写一条审计。
-    写失败不能影响下载本身：审计是附加证据，不是导出的前置条件。
-    """
-    try:
-        from app.agents.base import mask_sensitive
-        from app.extensions import db
-        from app.models import AuditLog
-        u = current_user()
-        db.session.add(AuditLog(actor=(u.name if u else "system")[:32],
-                                agent="export", action=kind,
-                                output_digest=mask_sensitive(detail)[:240]))
-        db.session.commit()
-    except Exception:                                    # noqa: BLE001
-        try:
-            from app.extensions import db
-            db.session.rollback()
-        except Exception:                                # noqa: BLE001
-            pass
 
 
 def _login_page(**kw):

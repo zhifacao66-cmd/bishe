@@ -101,16 +101,35 @@ def export():
     用自研 `app/xlsx.py` 而非 openpyxl：线上托管环境的依赖不能确定，
     openpyxl 体量大、又不在 requirements 里，缺了会让导出直接 500
     （2026-11-03 线上就因此全灭）。自研写入器零依赖，格式坑已处理过。
+
+    导出必须走 ABAC 的 R6 那一档：底册是「人」不是「事」，导一次就是几百条
+    姓名 / 证件掩码 / 门牌 / 残疾等级离开系统。只靠 `person.view` 不够——
+    那管的是"能不能看列表"，而文件一旦下载就脱离了页面，事后只能靠
+    水印（截图外传能追到人）和审计（谁在什么时候导了哪张表）找回来。
+    报表与公文导出早就是这三件套，底册原来漏了，等于最敏感的那类数据没有留痕。
     """
     import io
     from datetime import datetime
 
+    from app.exportlog import log_export
+    from app.policy import decide
+    from app.watermark import apply_xlsx
+    from app.watermark import text as wm_text
     from app.xlsx import Workbook, styles
 
+    u = current_user()
     kind = request.args.get("kind", "")
-    spec, header, rows = export_rows(current_user(), kind)
+    spec, header, rows = export_rows(u, kind)
     if spec is None:
         return fail("未知的导出类型：%s" % kind), 400
+
+    # 底册含个人信息，按「内部」级（2）参与判定：角色天花板够不够、
+    # 是否要水印、是否要留痕，全部由 policy 的 R6 一处决定，
+    # 不在这个函数里另写一套阈值。
+    d = decide(u, "export", "person", secret=2)
+    if not d.allow:
+        return fail(d.reason), 403
+    mark = wm_text(u, "导出底册") if d.watermark else ""
 
     wb = Workbook()
     ncol = len(header)
@@ -130,10 +149,17 @@ def export():
         for i, v in enumerate(row, start=1):
             sh.cell(r, i, v)
 
+    # 水印必须在 to_bytes 之前写入（页眉 + 数据区末行两道，见 watermark.py）
+    if mark:
+        apply_xlsx(sh, mark)
+
     buf = io.BytesIO(wb.to_bytes())
     buf.seek(0)
     stamp = datetime.now().strftime("%Y%m%d")
     fname = "%s_%s.xlsx" % (spec["title"], stamp)
+    # 审计只记表名与条数，不记姓名：这条轨迹本身也可能被导出
+    if d.log:
+        log_export("person", f"导出底册 {spec['title']}（{len(rows)} 条）")
     return send_file(buf, as_attachment=True, download_name=fname,
                      mimetype="application/vnd.openxmlformats-officedocument"
                               ".spreadsheetml.sheet")
