@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}{{ w.period }} 工作周报{% endblock %}
+{% block page_title %}{{ w.period }} 工作周报{% endblock %}
+{% block page_sub %}
+{{ w.start_date.strftime('%Y-%m-%d') }} 至 {{ w.end_date.strftime('%Y-%m-%d') }}　·　第 {{ w.revision }} 版　·　
+{% if w.status == 'final' %}已签发（{{ w.signed_by }}，{{ w.signed_at.strftime('%Y-%m-%d %H:%M') }}）{% else %}草稿{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="card col-12" style="margin-bottom:14px">
+  <div class="card-h" style="flex-wrap:wrap;gap:8px">
+    <h2>操作</h2>
+    <span class="hint">签发后正文冻结；要改请重新生成一版，历史版本保留</span>
+    <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+      {% if can('weekly.manage') and w.status == 'draft' %}
+      <button class="btn btn-ghost" id="btnEdit">编辑正文</button>
+      <button class="btn btn-ghost" id="btnPolish">模型起草两段</button>
+      <button class="btn btn-primary" id="btnFinal">签发</button>
+      {% endif %}
+      <button class="btn btn-ghost" onclick="window.print()">打印</button>
+      <a class="btn btn-ghost" href="{{ back }}">返回</a>
+    </div>
+  </div>
+  {% if can('weekly.manage') and w.status == 'draft' %}
+  <div class="card-b" id="editBox" style="display:none">
+    <div class="field"><label>正文（Markdown）
+      <span style="color:var(--muted);font-weight:400">数字部分建议不要改——改了就和取数快照对不上了</span></label>
+      <textarea class="inp" id="bodyMd" rows="22" style="font-family:ui-monospace,Menlo,monospace;
+        line-height:1.7;font-size:13px">{{ w.body_md }}</textarea>
+    </div>
+    <button class="btn btn-primary" id="btnSave">保存</button>
+    <button class="btn btn-ghost" id="btnCancel">取消</button>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card col-12" style="margin-bottom:14px">
+  <div class="card-h"><h2>周报正文</h2>
+    <span class="hint">草稿阶段可改；「存在问题 / 下周计划」需要人工确认</span></div>
+  <div class="card-b">
+    <div class="md" id="mdBody">{{ body | safe }}</div>
+  </div>
+</div>
+
+<div class="card col-12">
+  <div class="card-h"><h2>取数明细</h2>
+    <span class="hint">这张表和正文里的数字出自同一次查询，点开可核</span></div>
+  <div class="card-b">
+    {% if data['counts'] %}
+    {% set LBL = {'fde':'首录条数','items':'拆解业务项','wo_new':'新派工单','wo_done':'办结工单',
+      'wo_overdue':'超时未结','ledger':'新增台账','doc_in':'收到来文','doc_in_received':'签收来文',
+      'doc_in_done':'办结来文','doc_out':'制发公文','doc_sent':'已分发公文','doc_late':'逾期未办来文',
+      'task_new':'承办任务','task_done':'完成任务','task_late':'逾期任务','ticket':'居民诉求'} %}
+    <div class="fgrid fgrid-3">
+      {% for k, v in data['counts'].items() %}
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+        <div style="font-size:20px;font-weight:500">{{ v }}</div>
+        <div style="font-size:12px;color:var(--muted)">{{ LBL.get(k, k) }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="margin-top:14px;font-size:12px;color:var(--muted)">
+      采集于 {{ data.collected_at or '—' }}；
+      明细 id 快照：{% for k, ids in (data['items'] or {}).items() %}{{ k }} {{ ids|length }} 条{% if not loop.last %}、{% endif %}{% endfor %}
+    </div>
+    {% else %}
+    <div style="color:var(--muted)">这份周报没有取数快照（早期数据）</div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.md{font-size:14px;line-height:1.9}
+.md h1{font-size:19px;margin:0 0 10px;font-weight:500}
+.md h2{font-size:15px;margin:20px 0 8px;font-weight:500;padding-left:8px;border-left:3px solid #206bc4}
+.md p{margin:0 0 8px}
+.md ul,.md ol{margin:0 0 10px 1.6em}
+.md blockquote{color:var(--muted);border-left:3px solid var(--border);padding-left:10px;margin:0 0 12px}
+@media print{.sidebar,.topbar,.nav,.card-h,.navtoggle{display:none !important}
+  .card{border:none;box-shadow:none}.card-b{padding:0}
+  .card:first-child,.card:last-child{display:none}}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var ID = {{ w.id }};
+  var $ = function (id) { return document.getElementById(id); };
+  function show() { $('editBox').style.display = 'block'; $('mdBody').parentNode.style.display = 'none'; }
+  function hide() { $('editBox').style.display = 'none'; $('mdBody').parentNode.style.display = ''; }
+
+  if ($('btnEdit')) $('btnEdit').onclick = show;
+  if ($('btnCancel')) $('btnCancel').onclick = hide;
+  if ($('btnSave')) {
+    $('btnSave').onclick = function () {
+      var body = $('bodyMd').value;
+      if (!body.trim()) { alert('正文不能为空'); return; }
+      this.disabled = true;
+      window.api('/api/weekly/' + ID, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body_md: body })
+      }).then(function (j) {
+        if (j.code !== 0) { alert(j.msg); return; }
+        location.reload();
+      }).catch(function () { $('btnSave').disabled = false; });
+    };
+  }
+  if ($('btnPolish')) {
+    $('btnPolish').onclick = function () {
+      if (!confirm('让本地模型重写「存在问题 / 下周计划」两段？会覆盖这两段现有内容。')) return;
+      var b = this; b.disabled = true; b.textContent = '起草中…';
+      window.api('/api/weekly/' + ID + '/polish', { method: 'POST', timeout: 120000 })
+        .then(function (j) {
+          if (j.code !== 0) { alert(j.msg); b.disabled = false; b.textContent = '模型起草两段'; return; }
+          location.reload();
+        }).catch(function () { b.disabled = false; b.textContent = '模型起草两段'; });
+    };
+  }
+  if ($('btnFinal')) {
+    $('btnFinal').onclick = function () {
+      if (!confirm('签发后正文冻结，确认签发？')) return;
+      this.disabled = true;
+      window.api('/api/weekly/' + ID + '/finalize', { method: 'POST' }).then(function (j) {
+        if (j.code !== 0) { alert(j.msg); $('btnFinal').disabled = false; return; }
+        location.reload();
+      }).catch(function () { $('btnFinal').disabled = false; });
+    };
+  }
+})();
+</script>
+{% endblock %}

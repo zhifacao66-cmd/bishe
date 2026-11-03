@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}知识库 · 极简减负平台{% endblock %}
+{% block page_title %}知识库{% endblock %}
+{% block page_sub %}政策文件 · 办事指南 · 表格模板 · 本地检索，文档不出内网{% endblock %}
+
+{% block content %}
+<div class="card col-4">
+  <div class="stat">
+    <div class="ic" style="background:#e3edfb;color:#206bc4">📚</div>
+    <div><div class="num" id="sDoc">-</div><div class="lbl">文档数</div></div>
+  </div>
+</div>
+<div class="card col-4">
+  <div class="stat">
+    <div class="ic" style="background:#e0f5ea;color:#1e8e5a">🧩</div>
+    <div><div class="num" id="sChunk">-</div><div class="lbl">知识切片</div></div>
+  </div>
+</div>
+<div class="card col-4">
+  <div class="stat">
+    <div class="ic" style="background:#fdf0d7;color:#b37700">🔍</div>
+    <div><div class="num" id="sMode" style="font-size:16px">-</div><div class="lbl">检索方式</div></div>
+  </div>
+</div>
+
+<!-- 问答 -->
+<div class="card col-7">
+  <div class="card-h">
+    <h2>💬 政策问答</h2>
+    <span class="hint">检索本地知识库 → 本地模型作答 → 标注出处</span>
+  </div>
+  <div class="card-b">
+    <textarea class="fde-input" id="q" rows="3" placeholder="例如：高龄老人津贴多大年龄可以领？需要哪些材料？"></textarea>
+    <div class="quick" style="margin-top:10px;">
+      试试：
+      <a onclick="fillQ('高龄老人津贴怎么申请，需要哪些材料')">高龄津贴申请</a>
+      <a onclick="fillQ('群租房怎么认定，发现后怎么处置')">群租认定</a>
+      <a onclick="fillQ('电梯坏了物业多久必须到场')">报修时限</a>
+      <a onclick="fillQ('独居老人多久探访一次')">探访频次</a>
+    </div>
+    <div style="margin-top:12px;display:flex;align-items:center;gap:10px;">
+      <button class="btn btn-primary" id="btnAsk" onclick="ask()">🔎 检索并回答</button>
+      <span class="hint" id="askHint" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+
+    <div id="answerBox" style="display:none;margin-top:16px;">
+      <div class="ans" id="answer"></div>
+      <div class="src-title">📎 参考出处（点击查看原文）</div>
+      <div id="hits"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 文档管理 -->
+<div class="card col-5">
+  <div class="card-h">
+    <h2>🗂️ 知识文档</h2>
+    <span class="hint" id="docCount"></span>
+  </div>
+  <div class="card-b" style="padding-bottom:8px;">
+    <div class="filters" id="cats"></div>
+  </div>
+  <div id="docList" style="max-height:330px;overflow:auto;"></div>
+  {% if can('kb.manage') %}
+  <div class="card-b" style="border-top:1px solid var(--border);">
+    <button class="btn btn-ghost" style="width:100%;justify-content:center" onclick="toggleForm()">＋ 新增文档</button>
+    <div id="addForm" style="display:none;margin-top:14px;">
+      <input class="inp" id="nTitle" placeholder="文档标题，如：残疾人两项补贴申领指南">
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <select class="inp" id="nCat" style="flex:1">
+          <option>政策文件</option><option>办事指南</option><option>工作规范</option><option>表格模板</option>
+        </select>
+        <input class="inp" id="nSrc" placeholder="来源/文号（可选）" style="flex:1.4">
+      </div>
+      <textarea class="fde-input" id="nContent" rows="5" style="margin-top:8px;min-height:0"
+        placeholder="粘贴正文，建议保留「## 小标题」结构，切片效果更好"></textarea>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="addDoc()">保存并建索引</button>
+      <div class="hint" style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.7">
+        也可以直接把 .md / .txt 文件放进 <code>data/kb/</code> 目录后重启，系统自动增量入库。
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- 原文弹窗 -->
+<div id="modal" class="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-h"><h3 id="mTitle"></h3><span onclick="closeModal()" class="x">✕</span></div>
+    <div class="modal-meta" id="mMeta"></div>
+    <div class="modal-body" id="mBody"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+  .ans{background:#f6f9ff;border:1px solid #dbe7fb;border-radius:9px;padding:14px 16px;
+    font-size:13px;line-height:1.95;white-space:pre-wrap;color:#243448;}
+  .ans .cite{color:#206bc4;background:#e8f1fd;border-radius:4px;padding:0 3px;font-size:12.5px;}
+  .src-title{font-size:12px;color:var(--muted);margin:14px 0 8px;}
+  .hit{display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border:1px solid var(--border);
+    border-radius:9px;margin-bottom:8px;cursor:pointer;background:#fff;transition:all .15s;}
+  .hit:hover{border-color:#b9d3f2;background:#f8fbff;}
+  .hit .sc{flex-shrink:0;font-size:11px;background:#e3edfb;color:#206bc4;border-radius:8px;padding:3px 7px;margin-top:1px;}
+  .hit b{font-size:12.5px;}
+  .hit small{display:block;color:var(--muted);font-size:11.5px;line-height:1.6;margin-top:3px;}
+  .filters{display:flex;flex-wrap:wrap;gap:6px;}
+  .filters span{font-size:11.5px;padding:4px 10px;border-radius:14px;border:1px solid var(--border);
+    color:#4a5b70;cursor:pointer;background:#fff;}
+  .filters span.on{background:#e8f1fc;border-color:#c9ddf8;color:#206bc4;font-weight:600;}
+  .inp{width:100%;border:1.5px solid var(--border);background:#fbfcfe;border-radius:8px;
+    padding:8px 11px;font-size:13px;outline:none;font-family:inherit;}
+  .inp:focus{border-color:var(--primary);background:#fff;}
+  .modal{display:none;position:fixed;inset:0;background:rgba(16,28,44,.42);z-index:99;
+    align-items:center;justify-content:center;padding:24px;}
+  .modal.show{display:flex;}
+  .modal-box{background:#fff;border-radius:12px;width:100%;max-width:720px;max-height:82vh;
+    display:flex;flex-direction:column;overflow:hidden;box-shadow:0 16px 48px rgba(16,28,44,.22);}
+  .modal-h{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);}
+  .modal-h h3{font-size:15px;}
+  .modal-h .x{cursor:pointer;color:var(--muted);font-size:15px;padding:2px 6px;}
+  .modal-meta{padding:10px 20px;font-size:12px;color:var(--muted);background:#fafbfd;border-bottom:1px solid var(--border);}
+  .modal-body{padding:18px 20px;overflow:auto;font-size:13px;line-height:1.95;white-space:pre-wrap;}
+  .doc-row{display:flex;gap:10px;align-items:center;padding:10px 18px;border-bottom:1px solid #f0f2f7;}
+  .doc-row:hover{background:#fafbfe;}
+  .doc-row b{font-size:12.5px;display:block;}
+  .doc-row small{font-size:11px;color:var(--muted);}
+  .doc-row .ops{margin-left:auto;display:flex;gap:6px;}
+  .mini-btn{font-size:11px;border:1px solid var(--border);background:#fff;border-radius:6px;
+    padding:3px 9px;cursor:pointer;color:#4a5b70;font-family:inherit;}
+  .mini-btn:hover{border-color:#b9d3f2;color:#206bc4;}
+  .mini-btn.del:hover{border-color:#f0bcbc;color:#d63939;}
+</style>
+<script>
+let DOCS = [], CUR_CAT = '';
+/* stats 一次请求算两家用：文档数/切片数/分类列表都在这一个响应里。
+   之前 loadStats 与 loadCats 各发一次同 URL 请求，等于每次进知识库白跑一趟。 */
+let STATS = null;
+async function getStats(force){
+  if (STATS && !force) return STATS;
+  const j = await api('/api/kb/stats');
+  STATS = j.data || {};
+  return STATS;
+}
+
+async function loadStats(){
+  const d = await getStats();
+  document.getElementById('sDoc').textContent = d.doc_count ?? '-';
+  document.getElementById('sChunk').textContent = d.chunk_count ?? '-';
+  document.getElementById('sMode').textContent = d.dense ? ('混合检索 · ' + (d.embed_model||'')) : 'BM25 稀疏检索';
+}
+
+async function loadDocs(){
+  const j = await api('/api/kb/docs' + (CUR_CAT ? '?category=' + encodeURIComponent(CUR_CAT) : ''));
+  DOCS = j.data || [];
+  document.getElementById('docCount').textContent = DOCS.length + ' 篇';
+  const box = document.getElementById('docList');
+  if(!DOCS.length){ box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:12.5px">该分类暂无文档</div>'; return; }
+  box.innerHTML = DOCS.map(d=>`
+    <div class="doc-row">
+      <div style="flex:1;min-width:0">
+        <b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.title)}</b>
+        <small>${esc(d.category)} · ${d.chunks} 切片 · ${d.chars} 字</small>
+      </div>
+      <div class="ops">
+        <button class="mini-btn" onclick="openDoc(${d.id})">原文</button>
+        ${ {{ 'true' if can('kb.manage') else 'false' }} ? `<button class="mini-btn del" onclick="delDoc(${d.id})">删除</button>` : '' }
+      </div>
+    </div>`).join('');
+}
+
+async function loadCats(){
+  const d = await getStats();
+  const cats = d.categories || [];
+  document.getElementById('cats').innerHTML =
+    `<span class="${CUR_CAT===''?'on':''}" onclick="pickCat('')">全部</span>` +
+    cats.map(c=>`<span class="${CUR_CAT===c.name?'on':''}" onclick="pickCat('${esc(c.name)}')">${esc(c.name)} ${c.count}</span>`).join('');
+}
+
+function pickCat(c){ CUR_CAT = c; loadCats(); loadDocs(); }
+
+function fillQ(t){ document.getElementById('q').value = t; document.getElementById('q').focus(); }
+
+/* 轻量渲染：转义 HTML 后只放开 **加粗** 与《文件名》高亮，避免模型输出注入标签 */
+// 转义统一用 base.html 的全局 esc()（本页曾自带一份只转 & < > 的弱版本，
+// 会覆盖全局那份，在 HTML 属性里遇到单引号就漏掉了）
+function renderAns(t){
+  return esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+               .replace(/《([^》]{2,40})》/g, '<span class="cite">《$1》</span>');
+}
+
+async function ask(){
+  const q = document.getElementById('q').value.trim();
+  if(!q){ alert('请先输入问题'); return; }
+  const btn = document.getElementById('btnAsk');
+  const hint = document.getElementById('askHint');
+  btn.disabled = true; btn.textContent = '检索中…'; hint.textContent = '本地模型推理中，约 3~8 秒';
+  try{
+    const j = await api('/api/kb/ask',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({question:q})});
+    if(j.code!==0){ alert(j.msg); return; }
+    const d = j.data;
+    document.getElementById('answerBox').style.display = '';
+    document.getElementById('answer').innerHTML = renderAns(d.answer);
+    document.getElementById('hits').innerHTML = (d.hits||[]).map(h=>`
+      <div class="hit" onclick="openDoc(${h.doc_id})">
+        <span class="sc">${Math.round(h.score*100)}%</span>
+        <div style="min-width:0">
+          <b>《${esc(h.title)}》</b> <span style="color:var(--muted);font-size:11.5px">${esc(h.heading)}</span>
+          <small>${esc(h.snippet)}</small>
+        </div>
+      </div>`).join('') || '<div style="font-size:12.5px;color:var(--muted)">无命中片段</div>';
+    // 降级时把原因写出来：社工需要知道"再点一次要不要重试"。
+    // 只说"模型不可用"会让人以为服务坏了，其实多数是隧道抖了一下，重试即好。
+    hint.textContent = d.llm_used
+      ? '✅ 本地模型生成'
+      : '⚠️ 模型暂不可用，已降级为原文摘录' + (d.llm_error ? `（${d.llm_error}）` : '') + '　— 可稍后重试';
+    hint.style.color = d.llm_used ? '' : '#b45309';
+  } finally { btn.disabled=false; btn.textContent='🔎 检索并回答'; }
+}
+
+async function openDoc(id){
+  const j = await api('/api/kb/docs/' + id);
+  const d = j.data; if(!d) return;
+  document.getElementById('mTitle').textContent = d.title;
+  document.getElementById('mMeta').textContent = `${d.category} · ${d.source || '未标注来源'}`;
+  document.getElementById('mBody').textContent = d.content;
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal(){ document.getElementById('modal').classList.remove('show'); }
+
+function toggleForm(){
+  const f = document.getElementById('addForm');
+  f.style.display = f.style.display === 'none' ? '' : 'none';
+}
+
+async function addDoc(){
+  const title = document.getElementById('nTitle').value.trim();
+  const content = document.getElementById('nContent').value.trim();
+  if(!title || content.length < 20){ alert('请填写标题和至少 20 字的正文'); return; }
+  const j = await api('/api/kb/docs',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({title, content, category:document.getElementById('nCat').value,
+      source:document.getElementById('nSrc').value})});
+  if(j.code!==0){ alert(j.msg); return; }
+  alert(`已入库，切分为 ${j.data.chunks} 个片段`);
+  document.getElementById('nTitle').value=''; document.getElementById('nContent').value='';
+  document.getElementById('nSrc').value='';
+  toggleForm(); loadStats(); loadCats(); loadDocs();
+}
+
+async function delDoc(id){
+  // 标题从已加载的列表里按 id 取，不从 onclick 属性里拼字符串：
+  // 标题是外部导入的文件名，含引号时拼进 onclick 会直接把这段 JS 弄坏。
+  const doc = DOCS.find(x => x.id === id);
+  const title = doc ? doc.title : ('#' + id);
+  if(!confirm(`确认删除《${title}》？删除后会立即重建索引，该文档将不再被检索到。`)) return;
+  const j = await api('/api/kb/docs/'+id,{method:'DELETE'});
+  if(j.code!==0){ alert(j.msg); return; }
+  loadStats(); loadCats(); loadDocs();
+}
+
+loadStats(); loadCats(); loadDocs();
+</script>
+{% endblock %}

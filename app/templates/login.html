@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 内联 SVG 图标：不额外落一个文件，也不用再让浏览器为 /favicon.ico 吃一个 404 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23206bc4'/%3E%3Ctext x='32' y='45' font-size='34' text-anchor='middle' fill='%23fff' font-family='sans-serif'%3E%E7%A4%BE%3C/text%3E%3C/svg%3E">
+<title>登录 · 社区极简减负智能体平台</title>
+<link rel="stylesheet" href="{{ asset('css/login.css') }}">
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 左侧品牌区 -->
+  <section class="brand-side">
+    <div class="logo-row">
+      <div class="logo">🏘️</div>
+      <div>
+        <b>社区极简减负智能体平台</b>
+        <small>Multi-Agent Community Workbench</small>
+      </div>
+    </div>
+
+    <h1>一次录入<br>多方复用</h1>
+    <p class="lead">基于本地大模型与 Multi-Agent 协作，把社区工作者的口头叙述自动拆解、脱敏、派单与归档，数据不出内网。</p>
+
+    <ul class="feats">
+      <li><span class="fi">①</span><div><b>FDE 首录</b><small>一句话说清一件事，Agent 拆成多条业务项</small></div></li>
+      <li><span class="fi">②</span><div><b>保密审查</b><small>身份证/手机号自动识别脱敏，全程审计留痕</small></div></li>
+      <li><span class="fi">③</span><div><b>权限隔离</b><small>社区、物业、街道各看各的，最小必要原则</small></div></li>
+    </ul>
+
+    <div class="brand-foot"><span class="dot"></span>本系统运行于内网 · 大模型本地推理 · 外网调用 0 次</div>
+  </section>
+
+  <!-- 右侧登录区 -->
+  <section class="form-side">
+    <div class="form-card">
+      <h2>登录工作台</h2>
+      <p class="hint">请使用分配给您的账号，不同角色登录后可见的功能不同</p>
+
+      {% if err %}<div class="err">⚠️ {{ err }}</div>{% endif %}
+
+      <form method="post" action="{{ url_for('views.login', next=next) }}" autocomplete="off">
+        <label>账号</label>
+        <input type="text" name="username" id="username" value="{{ username }}" placeholder="请输入账号" required autofocus>
+        <label>密码</label>
+        <input type="password" name="password" id="password" placeholder="请输入密码" required>
+        <input type="hidden" name="next" value="{{ next }}">
+        <button class="submit" type="submit">登 录</button>
+      </form>
+
+      <div class="divider"><span>演示账号 · 点击自动填入</span></div>
+
+      <div class="roles">
+        {# 姓名、单位、账号、密码全部来自 DEMO_USERS，模板只负责长相。
+           图标/配色/标签按角色查表，数据一变样式不用跟着改。 #}
+        {% set ROLE_UI = {
+          'admin':     ('👥', '#efe6fb', '#6b3fb5', 't-purple', '审核 / 授权', '系统管理员'),
+          'community': ('📝', '#e3edfb', '#206bc4', 't-blue',   '首录 / 台账 / 报表', '社区工作者'),
+          'property':  ('🔧', '#fdf0d7', '#b37700', 't-orange', '仅工单', '物业服务'),
+          'street':    ('📊', '#e0f5ea', '#1e8e5a', 't-green',  '报表 / 审计', '街道办事处'),
+        } %}
+        {% for d in demo_users %}
+        {% set ui = ROLE_UI.get(d.role, ('👤', '#eef1f6', '#41556f', 't-blue', '演示账号', d.role)) %}
+        <button type="button" class="role" data-u="{{ d.username }}" data-p="{{ d.password }}">
+          <span class="ico" style="background:{{ ui[1] }};color:{{ ui[2] }}">{{ ui[0] }}</span>
+          <div><b>{{ ui[5] }}</b><small>{% if d.name != ui[5] %}{{ d.name }} · {% endif %}{{ d.org }}</small></div>
+          <span class="tag {{ ui[3] }}">{{ ui[4] }}</span>
+        </button>
+        {% endfor %}
+      </div>
+
+      <div class="note">🔐 所有登录、越权尝试均写入审计日志，可在街道账号的「审计日志」中查看。</div>
+
+      <a class="join-entry" href="{{ url_for('admin.register') }}">
+        <span class="re-ico">🧑‍💻</span>
+        <span>
+          <b>新同事？申请工作账号</b>
+          <small>自助填表 → 管理员审核 → 按岗位授权</small>
+        </span>
+        <span class="re-arrow">›</span>
+      </a>
+
+      <a class="resident-entry" href="{{ url_for('portalviews.home') }}">
+        <span class="re-ico">🏠</span>
+        <span>
+          <b>我是居民，不是工作人员</b>
+          <small>反映问题 · 查办理进度 · 看公告 · 找谁办事（无需登录）</small>
+        </span>
+        <span class="re-arrow">›</span>
+      </a>
+    </div>
+  </section>
+</div>
+
+<style>
+.t-purple{background:#efe6fb;color:#6b3fb5;}
+.join-entry{
+  display:flex;align-items:center;gap:12px;margin-top:10px;padding:13px 16px;
+  border:1px solid #e3d9f7;border-radius:12px;background:#faf7ff;color:#5b34a0;
+  text-decoration:none;transition:.18s;
+}
+.join-entry:hover{background:#f3ecff;border-color:#c9b2ef;transform:translateY(-1px)}
+.join-entry b{display:block;font-size:13.5px}
+.join-entry small{display:block;font-size:12px;color:#7d6ba3;margin-top:2px}
+.join-entry .re-ico{font-size:20px;line-height:1}
+.join-entry .re-arrow{margin-left:auto;font-size:22px;color:#b9a3e0}
+.resident-entry{
+  display:flex;align-items:center;gap:12px;margin-top:10px;padding:13px 16px;
+  border:1.5px dashed #b9cdea;border-radius:12px;background:#f5f9ff;
+  color:#16408f;text-decoration:none;transition:.18s;
+}
+.resident-entry:hover{background:#eaf2ff;border-color:#7fa7e0;transform:translateY(-1px)}
+.resident-entry b{display:block;font-size:13.5px}
+.resident-entry small{display:block;font-size:12px;color:#5b7392;margin-top:2px}
+.resident-entry .re-ico{font-size:20px;line-height:1}
+.resident-entry .re-arrow{margin-left:auto;font-size:22px;color:#7fa7e0}
+</style>
+
+<script>
+document.querySelectorAll('.role').forEach(function (b) {
+  b.addEventListener('click', function () {
+    document.getElementById('username').value = b.dataset.u;
+    document.getElementById('password').value = b.dataset.p;
+    document.querySelector('.submit').focus();
+  });
+});
+</script>
+</body>
+</html>

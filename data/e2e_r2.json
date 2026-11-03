@@ -1,0 +1,806 @@
+{
+  "generated_at": "2026-10-19 11:58:10",
+  "cases": 24,
+  "fde_count": 24,
+  "item_count": 32,
+  "order_count": 11,
+  "ledger_count": 39,
+  "items": {
+    "tp": 31,
+    "fp": 1,
+    "fn": 0,
+    "p": 96.9,
+    "r": 100.0,
+    "f1": 98.4,
+    "type_acc": 100.0
+  },
+  "orders": {
+    "tp": 11,
+    "fp": 0,
+    "fn": 0,
+    "p": 100.0,
+    "r": 100.0,
+    "f1": 100.0,
+    "miss_rate": 0.0,
+    "extra_rate": 0.0
+  },
+  "ledgers": {
+    "tp": 24,
+    "fp": 4,
+    "fn": 0,
+    "p": 85.7,
+    "r": 100.0,
+    "f1": 92.3,
+    "miss_rate": 0.0,
+    "extra_rate": 14.3,
+    "dup_in_fde": 0,
+    "extra_from_split": 1,
+    "extra_cross_line": 3
+  },
+  "privacy": {
+    "pii_total": 5,
+    "recall": 100.0,
+    "leak_in_masked": 0,
+    "db_plaintext_hits": 0,
+    "db_plaintext_detail": [],
+    "reuse_expected": 2,
+    "reuse_hit": 2,
+    "reuse_rate": 100.0,
+    "reuse_count": 4
+  },
+  "closure": {
+    "orders": 11,
+    "done": 11,
+    "rate": 100.0
+  },
+  "consistency": {
+    "orphan_items": 0,
+    "orphan_rate": 0.0,
+    "audit_total": 107,
+    "audit_per_fde": 4.5,
+    "audit_by_action": {
+      "accept": 11,
+      "dispatch": 11,
+      "fill": 21,
+      "finish": 11,
+      "login": 2,
+      "parse": 24,
+      "search": 3,
+      "security_check": 24
+    }
+  },
+  "latency": {
+    "mean": 2.26,
+    "p50": 2.08,
+    "p95": 3.91,
+    "max": 4.5
+  },
+  "report_check": {
+    "report_fde": 24,
+    "report_item": 32,
+    "report_order": 11,
+    "match": true
+  },
+  "rows": [
+    {
+      "id": "C01",
+      "text": "2栋2单元202室新租户李某，电话13800001234，这个月搬进来的",
+      "cost": 2.52,
+      "items": [
+        "人口变动:2栋2单元202室新租户李某登记"
+      ],
+      "item_lines": [
+        [
+          "综治"
+        ]
+      ],
+      "act_ledger_lines": [
+        "综治"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 1,
+      "act_ledgers": 1,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 1,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 0,
+      "reused": 0
+    },
+    {
+      "id": "C02",
+      "text": "7栋3单元电梯有异响，麻烦物业尽快检修，联系电话13900001111",
+      "cost": 1.96,
+      "items": [
+        "报修:7栋3单元电梯异响"
+      ],
+      "item_lines": [
+        [
+          "物业"
+        ]
+      ],
+      "act_ledger_lines": [],
+      "exp_orders": 1,
+      "act_orders": 1,
+      "exp_ledgers": 0,
+      "act_ledgers": 0,
+      "order_ok": 1,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 0,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 1,
+      "reused": 0
+    },
+    {
+      "id": "C03",
+      "text": "2栋2单元202室租户李某要补办居住登记",
+      "cost": 2.08,
+      "items": [
+        "人口变动:2栋2单元202室租户李某居住登记补办"
+      ],
+      "item_lines": [
+        [
+          "综治"
+        ]
+      ],
+      "act_ledger_lines": [
+        "综治"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 1,
+      "act_ledgers": 1,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 1,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 0,
+      "reused": 1
+    },
+    {
+      "id": "C04",
+      "text": "今天走访7栋独居老人王奶奶，她血压偏高，家里下水道也堵了",
+      "cost": 2.97,
+      "items": [
+        "走访:走访7栋独居老人王奶奶",
+        "报修:7栋王奶奶家下水道堵塞"
+      ],
+      "item_lines": [
+        [
+          "民政",
+          "卫健"
+        ],
+        [
+          "物业"
+        ]
+      ],
+      "act_ledger_lines": [
+        "民政",
+        "卫健"
+      ],
+      "exp_orders": 1,
+      "act_orders": 1,
+      "exp_ledgers": 2,
+      "act_ledgers": 2,
+      "order_ok": 1,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 2,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 1,
+      "reused": 0
+    },
+    {
+      "id": "C05",
+      "text": "10栋架空层有人私拉电线给电动车充电，另外6栋地下室群租问题还没处理",
+      "cost": 3.15,
+      "items": [
+        "隐患排查:10栋架空层私拉电线充电",
+        "隐患排查:6栋地下室群租问题"
+      ],
+      "item_lines": [
+        [
+          "综治"
+        ],
+        [
+          "综治"
+        ]
+      ],
+      "act_ledger_lines": [
+        "综治",
+        "综治"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 2,
+      "act_ledgers": 2,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 2,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 0,
+      "reused": 0
+    },
+    {
+      "id": "C06",
+      "text": "12栋302新搬来一对小夫妻，男的是外地户口要办居住证；顺便说楼道声控灯不亮了",
+      "cost": 3.91,
+      "items": [
+        "人口变动:12栋302新搬来小夫妻登记",
+        "报修:12栋302楼道声控灯故障"
+      ],
+      "item_lines": [
+        [
+          "综治"
+        ],
+        [
+          "物业"
+        ]
+      ],
+      "act_ledger_lines": [
+        "综治"
+      ],
+      "exp_orders": 1,
+      "act_orders": 1,
+      "exp_ledgers": 1,
+      "act_ledgers": 1,
+      "order_ok": 1,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 1,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 1,
+      "reused": 0
+    },
+    {
+      "id": "C07",
+      "text": "5栋2单元低保户张阿姨来问这个月低保金为什么还没到账",
+      "cost": 1.83,
+      "items": [
+        "咨询:低保户张阿姨询问低保金到账情况"
+      ],
+      "item_lines": [
+        [
+          "民政"
+        ]
+      ],
+      "act_ledger_lines": [
+        "民政"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 1,
+      "act_ledgers": 1,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 1,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 0,
+      "reused": 0
+    },
+    {
+      "id": "C08",
+      "text": "9栋门禁坏了，另外3栋楼道灯也坏了，都需要修",
+      "cost": 2.58,
+      "items": [
+        "报修:9栋门禁损坏",
+        "报修:3栋楼道灯损坏"
+      ],
+      "item_lines": [
+        [
+          "物业"
+        ],
+        [
+          "物业"
+        ]
+      ],
+      "act_ledger_lines": [],
+      "exp_orders": 2,
+      "act_orders": 2,
+      "exp_ledgers": 0,
+      "act_ledgers": 0,
+      "order_ok": 2,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 0,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 2,
+      "reused": 0
+    },
+    {
+      "id": "C09",
+      "text": "8栋2单元电梯坏了，老人下不了楼，麻烦尽快修",
+      "cost": 2.99,
+      "items": [
+        "报修:8栋2单元电梯损坏",
+        "隐患排查:电梯故障影响老人出行"
+      ],
+      "item_lines": [
+        [
+          "物业"
+        ],
+        [
+          "综治"
+        ]
+      ],
+      "act_ledger_lines": [
+        "综治"
+      ],
+      "exp_orders": 1,
+      "act_orders": 1,
+      "exp_ledgers": 0,
+      "act_ledgers": 1,
+      "order_ok": 1,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 0,
+      "ledger_miss": 0,
+      "ledger_extra": 1,
+      "closed": 1,
+      "reused": 0
+    },
+    {
+      "id": "C10",
+      "text": "街道通知明天上午九点开会，要求上报本月消防检查台账",
+      "cost": 1.51,
+      "items": [
+        "其他:街道消防检查台账上报会议"
+      ],
+      "item_lines": [
+        [
+          "街道",
+          "综治"
+        ]
+      ],
+      "act_ledger_lines": [
+        "街道",
+        "综治"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 2,
+      "act_ledgers": 2,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 2,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 0,
+      "reused": 0
+    },
+    {
+      "id": "C11",
+      "text": "6栋两户居民因为空调外机滴水吵起来了，需要上门调解",
+      "cost": 1.68,
+      "items": [
+        "调解:6栋居民空调外机滴水纠纷调解"
+      ],
+      "item_lines": [
+        [
+          "综治"
+        ]
+      ],
+      "act_ledger_lines": [
+        "综治"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 1,
+      "act_ledgers": 1,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 1,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 0,
+      "reused": 1
+    },
+    {
+      "id": "C12",
+      "text": "辖区精神障碍患者刘某最近情绪不稳，家属说药快吃完了",
+      "cost": 1.54,
+      "items": [
+        "走访:走访精神障碍患者刘某家属"
+      ],
+      "item_lines": [
+        [
+          "卫健",
+          "民政"
+        ]
+      ],
+      "act_ledger_lines": [
+        "卫健",
+        "民政"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 1,
+      "act_ledgers": 2,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 1,
+      "ledger_miss": 0,
+      "ledger_extra": 1,
+      "closed": 0,
+      "reused": 0
+    },
+    {
+      "id": "C13",
+      "text": "租户赵某身份证320102199003074512，电话13712345678，8月1日入住5栋601",
+      "cost": 2.89,
+      "items": [
+        "人口变动:租户赵某入住5栋601登记"
+      ],
+      "item_lines": [
+        [
+          "综治"
+        ]
+      ],
+      "act_ledger_lines": [
+        "综治"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 1,
+      "act_ledgers": 1,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 1,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 0,
+      "reused": 0
+    },
+    {
+      "id": "C14",
+      "text": "居民来问高龄老人津贴怎么申请，需要准备哪些材料",
+      "cost": 1.49,
+      "items": [
+        "咨询:高龄老人津贴申请流程"
+      ],
+      "item_lines": [
+        [
+          "民政"
+        ]
+      ],
+      "act_ledger_lines": [
+        "民政"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 1,
+      "act_ledgers": 1,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 1,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 0,
+      "reused": 0
+    },
+    {
+      "id": "C15",
+      "text": "2栋屋顶漏水，物业说上周就报过了还没修好",
+      "cost": 1.52,
+      "items": [
+        "报修:2栋屋顶漏水未修复"
+      ],
+      "item_lines": [
+        [
+          "物业"
+        ]
+      ],
+      "act_ledger_lines": [],
+      "exp_orders": 1,
+      "act_orders": 1,
+      "exp_ledgers": 0,
+      "act_ledgers": 0,
+      "order_ok": 1,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 0,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 1,
+      "reused": 0
+    },
+    {
+      "id": "C16",
+      "text": "11栋电梯困人已经救出来了，需要检修；另外11栋消防通道堆了杂物；还有居民反映楼下广场舞噪音太大",
+      "cost": 4.5,
+      "items": [
+        "报修:11栋电梯困人已解救需检修",
+        "隐患排查:11栋消防通道堆放杂物",
+        "调解:11栋广场舞噪音扰民问题"
+      ],
+      "item_lines": [
+        [
+          "物业"
+        ],
+        [
+          "综治"
+        ],
+        [
+          "综治"
+        ]
+      ],
+      "act_ledger_lines": [
+        "综治",
+        "综治"
+      ],
+      "exp_orders": 1,
+      "act_orders": 1,
+      "exp_ledgers": 2,
+      "act_ledgers": 2,
+      "order_ok": 1,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 2,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 1,
+      "reused": 1
+    },
+    {
+      "id": "C17",
+      "text": "低保户李大爷来问临时救助怎么申请",
+      "cost": 1.38,
+      "items": [
+        "咨询:低保户李大爷咨询临时救助申请"
+      ],
+      "item_lines": [
+        [
+          "民政"
+        ]
+      ],
+      "act_ledger_lines": [
+        "民政"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 1,
+      "act_ledgers": 1,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 1,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 0,
+      "reused": 0
+    },
+    {
+      "id": "C18",
+      "text": "今天给3栋独居老人送餐，老人说膝盖疼得厉害",
+      "cost": 1.49,
+      "items": [
+        "走访:走访3栋独居老人送餐"
+      ],
+      "item_lines": [
+        [
+          "民政",
+          "卫健"
+        ]
+      ],
+      "act_ledger_lines": [
+        "民政",
+        "卫健"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 2,
+      "act_ledgers": 2,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 2,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 0,
+      "reused": 0
+    },
+    {
+      "id": "C19",
+      "text": "15栋新开了一家民宿，疑似群租经营，消防设施也不达标",
+      "cost": 1.84,
+      "items": [
+        "隐患排查:15栋疑似群租经营消防设施不达标"
+      ],
+      "item_lines": [
+        [
+          "综治",
+          "卫健"
+        ]
+      ],
+      "act_ledger_lines": [
+        "综治",
+        "卫健"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 1,
+      "act_ledgers": 2,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 1,
+      "ledger_miss": 0,
+      "ledger_extra": 1,
+      "closed": 0,
+      "reused": 0
+    },
+    {
+      "id": "C20",
+      "text": "居民反映7栋2单元楼道堆了很多纸箱，有火灾隐患",
+      "cost": 1.75,
+      "items": [
+        "隐患排查:7栋2单元楼道堆物火灾隐患"
+      ],
+      "item_lines": [
+        [
+          "综治"
+        ]
+      ],
+      "act_ledger_lines": [
+        "综治"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 1,
+      "act_ledgers": 1,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 1,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 0,
+      "reused": 0
+    },
+    {
+      "id": "C21",
+      "text": "街道要求各社区本周五前上报独居老人探访台账",
+      "cost": 1.58,
+      "items": [
+        "其他:街道独居老人探访台账上报"
+      ],
+      "item_lines": [
+        [
+          "街道",
+          "民政"
+        ]
+      ],
+      "act_ledger_lines": [
+        "街道",
+        "民政"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 2,
+      "act_ledgers": 2,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 2,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 0,
+      "reused": 0
+    },
+    {
+      "id": "C22",
+      "text": "5栋601租户赵某要办理居住证签注",
+      "cost": 2.19,
+      "items": [
+        "人口变动:5栋601租户赵某居住证签注"
+      ],
+      "item_lines": [
+        [
+          "综治",
+          "民政"
+        ]
+      ],
+      "act_ledger_lines": [
+        "综治",
+        "民政"
+      ],
+      "exp_orders": 0,
+      "act_orders": 0,
+      "exp_ledgers": 1,
+      "act_ledgers": 2,
+      "order_ok": 0,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 1,
+      "ledger_miss": 0,
+      "ledger_extra": 1,
+      "closed": 0,
+      "reused": 1
+    },
+    {
+      "id": "C23",
+      "text": "1栋电梯坏了，同时2栋单元门禁也坏了，都要修",
+      "cost": 2.51,
+      "items": [
+        "报修:1栋电梯故障",
+        "报修:2栋单元门禁故障"
+      ],
+      "item_lines": [
+        [
+          "物业"
+        ],
+        [
+          "物业"
+        ]
+      ],
+      "act_ledger_lines": [],
+      "exp_orders": 2,
+      "act_orders": 2,
+      "exp_ledgers": 0,
+      "act_ledgers": 0,
+      "order_ok": 2,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 0,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 2,
+      "reused": 0
+    },
+    {
+      "id": "C24",
+      "text": "6栋3单元402住户反映水压太低，洗澡都成问题，电话13566667777",
+      "cost": 2.38,
+      "items": [
+        "报修:6栋3单元402室水压偏低"
+      ],
+      "item_lines": [
+        [
+          "物业"
+        ]
+      ],
+      "act_ledger_lines": [],
+      "exp_orders": 1,
+      "act_orders": 1,
+      "exp_ledgers": 0,
+      "act_ledgers": 0,
+      "order_ok": 1,
+      "order_miss": 0,
+      "order_extra": 0,
+      "ledger_ok": 0,
+      "ledger_miss": 0,
+      "ledger_extra": 0,
+      "closed": 1,
+      "reused": 0
+    }
+  ],
+  "workload": {
+    "expected_docs": 35,
+    "actual_docs": 50,
+    "manual_entries": 59,
+    "system_entries": 24,
+    "reduction": 59.3,
+    "reduction_by_actual": 67.6,
+    "amplification": 1.33,
+    "docs_per_fde": 2.08
+  }
+}

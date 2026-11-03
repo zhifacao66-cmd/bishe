@@ -1,0 +1,38 @@
+[
+  {
+    "severity": "高",
+    "code": "A1",
+    "verdict": "首录「raw_text 是数字」导致 5xx",
+    "evidence": "HTTP 500"
+  },
+  {
+    "severity": "低",
+    "code": "B4",
+    "verdict": "非法路径返回 HTML 而非 JSON",
+    "evidence": "/api/orders/abc/accept"
+  },
+  {
+    "severity": "低",
+    "code": "D1",
+    "verdict": "已发布公告可重复发布且返回成功（无幂等提示）",
+    "evidence": "id=4"
+  },
+  {
+    "severity": "低",
+    "code": "D2",
+    "verdict": "已下架公告可重复下架且返回成功",
+    "evidence": "id=4"
+  },
+  {
+    "severity": "严重",
+    "code": "E6",
+    "verdict": "居民端按 id 可直接读他人单据（无归属校验）",
+    "evidence": "/api/portal/ticket/1"
+  },
+  {
+    "severity": "中",
+    "code": "H1",
+    "verdict": "写接口无 CSRF 防护，跨站表单可代发",
+    "evidence": "POST /api/tasks 无令牌仍成功"
+  }
+]

@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+{% block title %}{{ notice.title }} · 极简减负平台{% endblock %}
+{% block page_title %}{{ '社区落地件' if notice.kind == 'local' else '公告详情' }}{% endblock %}
+{% block page_sub %}
+{{ notice.issuer }}{% if notice.doc_no %} · {{ notice.doc_no }}{% endif %} · 状态：{{ {'published':'已发布','pending':'待确认','offline':'已下架'}.get(notice.status, notice.status) }}{% if notice.pinned %} · 📌 置顶{% endif %}
+{% endblock %}
+
+{% block content %}
+{#
+  返回条放在最上面，不是最下面。
+  这份文件动辄两三屏，原来的返回键落在页面底部，看完还得再滚一遍才能走；
+  而且它写死指向 /notices，筛选条件全丢——用户点的是"待签收"，回来却是全部，
+  得重新找刚才那条。现在 back 带着进来时那一屏的网址，原样回去。
+
+  back 在整个链路里恒定指向**列表那一屏**，不指向中间页。
+  详情 → 办文 → 落地件每一步都只传这一个值，不会越套越深。
+#}
+<div style="grid-column:1/-1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 2px">
+  <a class="btn btn-ghost" style="text-decoration:none;padding:6px 14px" href="{{ back }}">← 返回列表</a>
+  {% if notice.kind == 'local' and parent %}
+  <a class="btn btn-ghost" style="text-decoration:none;padding:6px 14px"
+     href="{{ url_for('views.notice_detail', nid=parent.id, back=back) }}">↩ 对照上级原文</a>
+  {% endif %}
+  {% if todo_count and can('notice.receive') %}
+  <a href="{{ url_for('views.notices', recv='dispatched') }}"
+     style="font-size:12.5px;color:#b8730b;text-decoration:none;margin-left:auto">
+    还有 <b>{{ todo_count }}</b> 条上级来文待签收 →
+  </a>
+  {% endif %}
+</div>
+
+<div class="card col-8">
+  <div class="card-h">
+    <h2>📄 {{ notice.title }}</h2>
+    <span class="hint">来源 {{ notice.source_file or '手工录入' }}</span>
+  </div>
+  <div class="card-b">
+    {% if notice.parse_note %}
+    <div style="background:#fdf6e8;border:1px solid #f0dcb4;color:#8a6412;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px">
+      <b>解析提示：</b>{{ notice.parse_note }}
+    </div>
+    {% endif %}
+
+    {# 流转时间线：一眼看清这份文件走到哪一步了 #}
+    {% if notice.kind != 'local' %}
+    <div class="flow">
+      {#
+        第 1 步显示**成文日期**而不是入库时间。created_at 是"这份文件被放进系统"的时刻，
+        演示库里所有记录都是同一天灌进去的，拿它当发文时间会和后面回填的签收时间倒挂
+        （10-21 发文、10-15 签收），看着像数据错了。公文语境里"发文时间"本来就是成文日期。
+      #}
+      <div class="fl done">
+        <span class="dot"></span>
+        <div><b>上级发文</b><small>{{ notice.issuer or '上级单位' }} · {% if notice.issued_at %}{{ notice.issued_at.strftime('%Y-%m-%d') }}{% elif notice.created_at %}{{ notice.created_at.strftime('%m-%d %H:%M') }}{% else %}—{% endif %}</small></div>
+      </div>
+      <div class="fl {{ 'done' if notice.recv_status == 'received' else 'wait' }}">
+        <span class="dot"></span>
+        <div><b>社区签收</b><small>{% if notice.recv_status == 'received' %}{{ notice.received_by }} · {{ notice.received_at.strftime('%m-%d %H:%M') if notice.received_at else '' }}{% else %}待签收{% endif %}</small></div>
+      </div>
+      <div class="fl {{ 'done' if children else 'wait' }}">
+        <span class="dot"></span>
+        <div><b>生成落地件</b><small>{% if children %}已生成 {{ children|length }} 份{% else %}未生成{% endif %}</small></div>
+      </div>
+      {#
+        第 4 步看的是**落地件**发没发出去，不是上级原文自己。
+        上级原文的发布状态回答的是"这份文件能不能给居民看"，
+        而上级真正关心的是"社区把要求落成通知、贴在楼下了没有"。
+        两者混用会让街道看到"已发布"却以为社区已经办完了。
+      #}
+      {% set lp = children | selectattr('status', 'equalto', 'published') | list | length %}
+      <div class="fl {{ 'done' if lp else 'wait' }}">
+        <span class="dot"></span>
+        <div><b>落地件发布</b><small>{% if lp %}已发布 {{ lp }} 份{% elif children %}已生成、未发布{% else %}未发布{% endif %}</small></div>
+      </div>
+      {#
+        第 5 步：办结。前四步回答的是"文件走到哪了"，只有这一步回答
+        "要求办成了没有"——周报里的「已办结 / 欠办」算的就是这一格的
+        handled_at。原来这里根本没有这一格，于是周报永远算出"办结 0 份"。
+      #}
+      <div class="fl {{ 'done' if notice.handled_at else 'wait' }}">
+        <span class="dot"></span>
+        <div><b>社区办结</b><small>{% if notice.handled_at %}{{ notice.handler or '经办人' }} · {{ notice.handled_at.strftime('%m-%d %H:%M') }}{% else %}未登记办理结果{% endif %}</small></div>
+      </div>
+    </div>
+    {% if notice.handle_result %}
+    <div class="res-box">
+      <b>办理结果：</b>{{ notice.handle_result }}
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {% if parent %}
+    <div class="src-ref">
+      <span>📎 本件依据上级文件</span>
+      <a href="{{ url_for('views.notice_detail', nid=parent.id, back=back) }}">《{{ parent.title }}》</a>
+      <span style="color:var(--muted)">{{ parent.issuer }}{% if parent.doc_no %} · {{ parent.doc_no }}{% endif %}</span>
+    </div>
+    {% endif %}
+
+    <div style="display:flex;flex-wrap:wrap;gap:6px 24px;font-size:12px;color:var(--muted);
+                padding-bottom:12px;margin-bottom:14px;border-bottom:1px solid var(--border)">
+      <span>发文单位：<b style="color:inherit">{{ notice.issuer or '—' }}</b></span>
+      <span>发文字号：<b style="color:inherit">{{ notice.doc_no or '—' }}</b></span>
+      <span>成文日期：<b style="color:inherit">{{ notice.issued_at.strftime('%Y-%m-%d') if notice.issued_at else '—' }}</b></span>
+      {% if notice.deadline %}<span>完成时限：<b style="color:#b8730b">{{ notice.deadline.strftime('%Y-%m-%d') }}</b></span>{% endif %}
+      <span>类别：<b style="color:inherit">{{ notice.category }}</b></span>
+      <span>范围：<b style="color:inherit">{{ notice.scope }}</b></span>
+    </div>
+
+    <div class="nd-body">{{ body|safe }}</div>
+
+    <div class="exp-bar">
+      <div class="exp-title">📤 导出文档</div>
+      <div class="exp-btns">
+        <a class="btn btn-primary" style="text-decoration:none"
+           href="{{ url_for('views.notice_export', nid=notice.id, fmt='docx') }}">Word 公文（红头）</a>
+        <a class="btn btn-ghost" style="text-decoration:none"
+           href="{{ url_for('views.notice_export', nid=notice.id, fmt='md') }}">Markdown 归档</a>
+        <a class="btn btn-ghost" style="text-decoration:none"
+           href="{{ url_for('views.notice_export', nid=notice.id, fmt='txt') }}">纯文本</a>
+        <a class="btn btn-ghost" style="text-decoration:none" target="_blank"
+           href="{{ url_for('portalviews.notice', nid=notice.id, mode='print') }}">打印版（另存 PDF）</a>
+        <a class="btn btn-ghost" style="text-decoration:none" target="_blank"
+           href="{{ url_for('portalviews.notice', nid=notice.id, mode='official') }}">网页发布版</a>
+      </div>
+      <div class="exp-note">
+        Word 件按 GB/T 9704 排：红头、文号、红色反线、三号仿宋正文、落款右对齐、页码。
+        Markdown 件带元信息头，可直接放回 <code>data/notices/</code> 重新入库。
+      </div>
+    </div>
+
+    {% if notice.status != 'published' %}
+    <p style="font-size:12px;color:#b8730b;margin:10px 0 0">
+      注：未发布的公告，居民端预览页会 404。请先发布。
+    </p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card col-4">
+  <div class="card-h"><h2>⚙️ 办理</h2></div>
+  <div class="card-b">
+    {% if can('notice.receive') and notice.kind != 'local' and notice.recv_status != 'received' %}
+      <button class="btn btn-primary" style="width:100%;margin-bottom:8px" id="btnRecv">✍️ 签收这份文件</button>
+    {% endif %}
+
+    {# 办结：签收之后才能填。没有这个入口，周报的「已办结/欠办」永远是 0 和全部 #}
+    {% if can('notice.handle') and notice.kind != 'local' %}
+      {% if notice.recv_status == 'received' %}
+      <div class="hdl-box">
+        <label for="hdlResult">办理结果{% if notice.handled_at %}（已办结，可补充）{% endif %}</label>
+        <textarea id="hdlResult" rows="3" maxlength="500"
+          placeholder="写清做了什么、什么结果，例如：已联系物业当日疏通，回访居民确认无积水">{{ notice.handle_result or '' }}</textarea>
+        <button class="btn btn-primary" style="width:100%;margin-top:8px" id="btnHandle">
+          {% if notice.handled_at %}💬 补充办理结果{% else %}✅ 登记办理结果（办结）{% endif %}
+        </button>
+        {% if notice.handled_at %}
+        <p class="hint">{{ notice.handler or '经办人' }} 于 {{ notice.handled_at.strftime('%Y-%m-%d %H:%M') }} 办结。
+          补充结果不会改动办结时间（周报按首次办结计）。</p>
+        {% else %}
+        <p class="hint">办结后，本周周报的「已办结来文」会自动 +1。</p>
+        {% endif %}
+      </div>
+      {% else %}
+      <p class="hint" style="font-size:11.5px;color:var(--muted);line-height:1.8;margin:0 0 8px">
+        先签收才能登记办理结果。</p>
+      {% endif %}
+    {% endif %}
+
+    {% if can('notice.localize') and notice.kind != 'local' %}
+      <a class="btn {{ 'btn-primary' if notice.recv_status == 'received' else 'btn-ghost' }}"
+         style="width:100%;margin-bottom:8px;text-decoration:none;display:block;text-align:center;box-sizing:border-box"
+         href="{{ url_for('views.notice_localize', nid=notice.id, back=back) }}">📝 生成社区落地件</a>
+    {% endif %}
+
+    {% if children %}
+    <div class="kids">
+      <div class="kids-t">已生成的本级落地件</div>
+      {% for c in children %}
+        <a href="{{ url_for('views.notice_detail', nid=c.id, back=back) }}">
+          {{ {'published':'✅','pending':'⏳','offline':'🗂️'}.get(c.status,'·') }} {{ c.title }}
+        </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if can('notice.manage') %}
+      {% if notice.status == 'pending' %}
+      <details style="margin:10px 0">
+        <summary style="font-size:12px;color:var(--muted);cursor:pointer">补全字段（解析不全时才需要）</summary>
+        <div class="field" style="margin-top:8px"><label>标题</label><input class="inp" id="pTitle" value="{{ notice.title }}"></div>
+        <div class="field"><label>发文单位 <span style="color:#c0392b">*必填</span></label>
+          <input class="inp" id="pIssuer" value="{{ notice.issuer }}" placeholder="如：幸福里街道办事处"></div>
+        <div class="field"><label>发文字号</label><input class="inp" id="pDocNo" value="{{ notice.doc_no }}" placeholder="如：幸街发〔2026〕18号"></div>
+        <div class="field"><label>成文日期</label>
+          <input class="inp" id="pDate" value="{{ notice.issued_at.strftime('%Y-%m-%d') if notice.issued_at else '' }}" placeholder="2026-10-15"></div>
+        <button class="btn btn-ghost" style="width:100%;margin-bottom:8px" id="btnSave">保存补全</button>
+      </details>
+      {% endif %}
+      <button class="btn btn-primary" style="width:100%;margin-bottom:8px" id="btnPub">
+        {{ '重新发布' if notice.status == 'published' else '确认发布到居民端' }}</button>
+      {% if notice.status == 'published' %}
+      <button class="btn btn-ghost" style="width:100%;margin-bottom:8px" id="btnOff">下架</button>
+      {% endif %}
+      {# 置顶不改可见性，只改排序：居民端第一屏和内部列表都按它排。
+         未发布的也允许置顶（内部列表先排好），但接口会回一句
+         "尚未发布，居民端暂时看不到"，避免误以为置顶=发布。 #}
+      <button class="btn btn-ghost" style="width:100%" id="btnPin"
+        {% if not notice.pinned and pinned_count >= max_pinned %}disabled title="已满 {{ max_pinned }} 条，先取消一条再置顶"{% endif %}>
+        {{ '📌 取消置顶' if notice.pinned else '📌 置顶到最前面' }}</button>
+      {# 额度写在按钮下面：点下去被拒才知道满了，用户只会以为功能坏了 #}
+      <p style="font-size:11px;color:var(--muted);margin:6px 0 0;text-align:center">
+        置顶 {{ pinned_count }}/{{ max_pinned }}{% if notice.pinned and notice.pinned_at %} · 本件置顶于 {{ notice.pinned_at.strftime('%m-%d %H:%M') }}{% endif %}{% if not notice.pinned and pinned_count >= max_pinned %} · 已满，先取消一条{% endif %}
+      </p>
+    {% else %}
+      <p style="font-size:13px;color:var(--muted);margin:0">
+        当前角色（{{ role_name(current_user.role) }}）只能查看与导出，发布与办文由社区工作者操作。
+      </p>
+    {% endif %}
+
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);line-height:1.9">
+      <div>创建人：{{ notice.created_by }}</div>
+      <div>入库：{{ notice.created_at.strftime('%Y-%m-%d %H:%M') if notice.created_at else '—' }}</div>
+      <div>发布：{{ notice.published_at.strftime('%Y-%m-%d %H:%M') if notice.published_at else '未发布' }}</div>
+      {% if notice.receiver_org %}<div>收文单位：{{ notice.receiver_org }}</div>{% endif %}
+      <div style="word-break:break-all">内容哈希：{{ notice.source_hash[:16] }}…</div>
+    </div>
+  </div>
+</div>
+
+<div style="grid-column:1/-1;display:flex;gap:10px;align-items:center;padding-top:2px">
+  <a class="btn btn-ghost" style="text-decoration:none;display:inline-block" href="{{ back }}">← 返回列表</a>
+  {% if todo_count and can('notice.receive') %}
+  <a class="btn btn-ghost" style="text-decoration:none;display:inline-block"
+     href="{{ url_for('views.notices', recv='dispatched') }}">接着处理待签收（{{ todo_count }}）</a>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.nd-body{font-size:14px;line-height:1.95;color:var(--text,#16202e)}
+.nd-body p{margin:0 0 10px;text-indent:2em}
+.nd-body h3,.nd-body h4{font-size:14px;margin:14px 0 6px}
+.nd-body ul,.nd-body ol{padding-left:22px;margin:0 0 10px}
+.nd-body blockquote{margin:0 0 10px;padding:9px 12px;background:#f7f9fc;border-left:3px solid var(--primary);color:#4a5b70;font-size:13px}
+.notice-table{width:100%;border-collapse:collapse;margin:0 0 10px;font-size:12px}
+.notice-table th,.notice-table td{border:1px solid var(--border);padding:6px 8px;text-align:left}
+.notice-table th{background:#f7f9fc}
+
+.flow{display:flex;flex-wrap:wrap;gap:0;margin:0 0 16px;padding:12px 14px;background:#f8fafd;border-radius:10px;border:1px solid var(--border)}
+.fl{flex:1;min-width:110px;display:flex;gap:7px;align-items:flex-start;position:relative;padding-right:8px}
+.fl .dot{width:9px;height:9px;border-radius:50%;margin-top:4px;flex:0 0 auto;background:#c9d4e3}
+.fl.done .dot{background:#12885a;box-shadow:0 0 0 3px #d8f0e4}
+.fl.wait .dot{background:#e0b872;box-shadow:0 0 0 3px #fbf0d9}
+.fl b{display:block;font-size:12.5px;color:#16202e;line-height:1.4}
+.fl.wait b{color:#7a8899;font-weight:600}
+.fl small{display:block;font-size:11px;color:var(--muted);line-height:1.5;margin-top:1px}
+
+.src-ref{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12.5px;
+  background:#f3f7ff;border:1px solid #d6e4f7;border-radius:8px;padding:9px 12px;margin-bottom:14px}
+.src-ref a{color:#16408f;text-decoration:none;font-weight:600}
+.src-ref a:hover{text-decoration:underline}
+
+.exp-bar{margin-top:20px;padding-top:14px;border-top:1px dashed var(--border)}
+.exp-title{font-size:13px;font-weight:600;color:#16202e;margin-bottom:9px}
+.exp-btns{display:flex;flex-wrap:wrap;gap:8px}
+.exp-note{font-size:11.5px;color:var(--muted);line-height:1.8;margin-top:10px}
+.exp-note code{background:#f2f5f9;padding:1px 5px;border-radius:4px}
+
+.kids{margin:10px 0;padding:10px 12px;background:#f8fafd;border-radius:8px;font-size:12.5px;line-height:1.9}
+.kids-t{color:var(--muted);font-size:11.5px;margin-bottom:4px}
+.kids a{display:block;color:#16408f;text-decoration:none}
+.kids a:hover{text-decoration:underline}
+
+.res-box{margin:0 0 14px;padding:10px 12px;background:#f2fbf6;border:1px solid #cdeadb;
+  border-left:3px solid #12885a;border-radius:8px;font-size:12.5px;line-height:1.8;color:#1c3b2c}
+.hdl-box{margin:10px 0;padding:10px 12px;background:#f8fafd;border:1px solid var(--border);border-radius:8px}
+.hdl-box label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+.hdl-box textarea{width:100%;box-sizing:border-box;font-size:12.5px;line-height:1.7;
+  padding:8px 9px;border:1px solid var(--border);border-radius:6px;resize:vertical;
+  font-family:inherit;color:var(--text,#16202e);background:#fff}
+.hdl-box .hint{font-size:11.5px;color:var(--muted);line-height:1.7;margin:6px 0 0}
+
+/* 手机上：公文标题/正文块经常带长英文、哈希、URL，不换行会顶出卡片 */
+@media (max-width:900px){
+  .card-h h2{word-break:break-word;}
+  .nd-body{overflow-wrap:break-word;}
+  .nd-body p{text-indent:0;}          /* 窄屏两字缩进会吃掉小半行 */
+  .nd-body img{max-width:100%;height:auto;}
+  .notice-table{font-size:11.5px;}
+  .notice-table th,.notice-table td{padding:5px 6px;}
+  /* 四步流转横排挤成一行会每步只剩两个字，改成 2×2 */
+  .fl{min-width:calc(50% - 6px);}
+  .exp-btns .btn{flex:1 1 auto;justify-content:center;}
+}
+</style>
+<script>
+function post(url, body) {
+  return api(url, { method: body ? 'PATCH' : 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: body ? JSON.stringify(body) : null });
+}
+var bR = document.getElementById('btnRecv');
+if (bR) bR.addEventListener('click', function () {
+  bR.disabled = true;
+  post('/api/notices/{{ notice.id }}/receive').then(function (j) {
+    bR.disabled = false;
+    if (j.code !== 0) { alert(j.msg || '签收失败'); return; }
+    // 签收只是"我收到了"，真正要办的是下一步。
+    // 原来只弹一句"已签收"就刷新，刷新完用户还得自己在右侧重新找办文按钮——
+    // 流程在这里断了一截。现在签完直接问一句要不要接着办。
+    {% if can('notice.localize') %}
+    if (confirm('已签收，签收人与时间已留痕。\n\n下一步：把上级要求落成本社区的执行通知，现在去办文？')) {
+      location.href = {{ url_for('views.notice_localize', nid=notice.id, back=back)|tojson }};
+      return;
+    }
+    {% else %}
+    alert(j.msg || '已签收');
+    {% endif %}
+    location.reload();
+  });
+});
+// 办结：写 handler / handled_at / handle_result 三列 + 一条 DocLog。
+// 走 api() 而不是页内 post()：那个封装带 body 时会发 PATCH（给改稿用的），
+// 而办结是 POST。
+var bH = document.getElementById('btnHandle');
+if (bH) bH.addEventListener('click', function () {
+  var box = document.getElementById('hdlResult');
+  var text = ((box && box.value) || '').trim();
+  if (text.length < 5) { alert('请写清办理结果（至少 5 个字）'); return; }
+  bH.disabled = true;
+  api('/api/notices/{{ notice.id }}/handle', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({result: text})
+  }).then(function (j) {
+    bH.disabled = false;
+    if (j.code !== 0) { alert(j.msg || '办结失败'); return; }
+    location.reload();
+  }).catch(function () { bH.disabled = false; });
+});
+var b1 = document.getElementById('btnSave');if (b1) b1.addEventListener('click', function () {
+  var d = { title: document.getElementById('pTitle').value,
+            issuer: document.getElementById('pIssuer').value,
+            doc_no: document.getElementById('pDocNo').value,
+            issued_at: document.getElementById('pDate').value };
+  post('/api/notices/{{ notice.id }}', d).then(function (j) {
+    alert(j.msg || '已保存'); if (j.code === 0) location.reload();
+  });
+});
+var b2 = document.getElementById('btnPub');
+if (b2) b2.addEventListener('click', function () {
+  b2.disabled = true;
+  post('/api/notices/{{ notice.id }}/publish').then(function (j) {
+    b2.disabled = false;
+    var msg = (j.data && j.data.msg) || j.msg || '已发布';
+    if (j.code !== 0) { alert(msg); return; }
+    // 发布完这一件，问一句要不要接着办下一件。
+    // 不问的话用户就停在这一页，还得自己回想"刚才列表里还有什么没办"。
+    {% if todo_count and can('notice.receive') %}
+    if (confirm(msg + '\n\n还有 {{ todo_count }} 条上级来文待签收，现在去处理？')) {
+      location.href = {{ url_for('views.notices', recv='dispatched')|tojson }};
+      return;
+    }
+    {% else %}
+    alert(msg);
+    {% endif %}
+    location.reload();
+  });
+});
+var b3 = document.getElementById('btnOff');
+if (b3) b3.addEventListener('click', function () {
+  if (!confirm('下架后居民端立即不可见，确定？')) return;
+  post('/api/notices/{{ notice.id }}/offline').then(function (j) {
+    alert((j.data && j.data.msg) || j.msg); location.reload();
+  });
+});
+var b4 = document.getElementById('btnPin');
+if (b4) b4.addEventListener('click', function () {
+  b4.disabled = true;
+  post('/api/notices/{{ notice.id }}/pin').then(function (j) {
+    b4.disabled = false;
+    var msg = (j.data && j.data.msg) || j.msg;
+    if (j.code !== 0) { alert(msg); return; }
+    alert(msg + '\n\n置顶只影响排序，不影响发布状态。');
+    location.reload();
+  });
+});
+</script>
+{% endblock %}

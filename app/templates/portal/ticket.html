@@ -1,0 +1,203 @@
+{% extends "portal/base.html" %}
+{% block title %}办理进度 · 幸福里居民服务{% endblock %}
+{% block sub %}查询码 {{ ticket.code }}{% endblock %}
+{% block body %}
+
+<div class="p-card">
+  <div class="top" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    <h2 style="margin:0"><span class="bar"></span>办理进度</h2>
+    <span class="tag tag-{{ ticket.status }}" style="margin-left:auto">
+      {{ {'open':'已受理','doing':'处理中','done':'已办结'}.get(ticket.status, '已受理') }}
+    </span>
+  </div>
+  <p class="p-muted" style="margin:0 0 4px">查询码 <b>{{ ticket.code }}</b> · 提交于 {{ ticket.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+  <p class="p-muted" style="margin:0">您反映的内容：{{ ticket.raw_text }}</p>
+</div>
+
+<div class="p-card">
+  <h2><span class="bar"></span>各项事项</h2>
+  {# 注意：view 是 dict，写 view.items 会先命中 dict 自带的 .items 方法（不是键），
+     循环一个内置方法直接 500。必须用下标取值。 #}
+  {% set matters = view['items'] %}
+  {% if matters %}
+  {% for it in matters %}
+  {% set cls = {'已受理':'open','处理中':'doing','已办结':'done'}.get(it.state, 'open') %}
+  <div class="p-org">
+    <div class="n" style="font-size:14px">{{ it.subject }}
+      <span class="tag tag-{{ cls }}" style="margin-left:auto">{{ it.state }}</span>
+    </div>
+    <div class="line"><b>类型</b><span>{{ it.type }}</span></div>
+    <div class="line"><b>承办</b><span>{{ it.orgs|join('、') }}</span></div>
+    {% if it.sla_hours %}<div class="line"><b>时限</b><span>承诺 {{ it.sla_hours }} 小时内响应</span></div>{% endif %}
+    {% if it.feedback %}<div class="fb" style="font-size:13px;color:var(--ink-2);background:#f7f9fc;border-radius:8px;padding:8px 10px;margin-top:8px">{{ it.feedback }}</div>{% endif %}
+    {# 承办单位自己的说法是"已办结"，但居民认不认是另一回事。
+       两个状态都摆出来，居民才知道"我说过没解决"这件事系统记住了。 #}
+    {% if it.confirm_text %}
+    <div style="font-size:12.5px;margin-top:6px;color:{{ '#b03131' if it.confirm_status == 'disputed' else '#1a7f4b' }}">
+      {{ it.confirm_text }}
+    </div>
+    {% endif %}
+    {% if it.verdict_text %}
+    <div style="font-size:12.5px;margin-top:6px;color:var(--ink-2);background:#fbf7ee;
+                border-radius:8px;padding:8px 10px">
+      <b>居委会裁定</b>：{{ it.verdict_text }}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <p class="p-muted">已受理，暂无更多进展。</p>
+  {% endif %}
+</div>
+
+{# 居民表态：整条链上唯一由居民发起的反向动作。
+   没有它，"物业说办完了"就是终局，居委会也无从知道哪件事其实没办成。 #}
+{% if view['can_confirm'] and view['confirm_status'] != 'ok' %}
+<div class="p-card" id="confirmCard">
+  <h2><span class="bar"></span>这件事解决了吗</h2>
+  <p class="p-muted" style="margin-top:0">
+    承办单位已反馈办理结果。请您确认是否真的解决——
+    如果没解决，居委会会介入核实并作出裁定。
+  </p>
+  <div style="display:flex;gap:10px;margin-top:12px">
+    <button class="p-btn" style="flex:1" onclick="doConfirm(true)">已解决</button>
+    <button class="p-btn" style="flex:1;background:#fff;color:#b03131;border:1px solid #f0c2bd"
+            onclick="showDispute()">没解决</button>
+  </div>
+
+  <div id="disputeBox" style="display:none;margin-top:14px;border-top:1px dashed #e3e8f0;padding-top:12px">
+    <div class="p-field" style="margin-bottom:10px">
+      <label>属于哪种情况 <span class="hint">选填</span></label>
+      <div id="dtags" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+    </div>
+    <div class="p-field">
+      <label for="dnote">哪里没解决 <span class="hint">必填，至少 4 个字</span></label>
+      <textarea id="dnote" placeholder="例：修完当天又漏了，墙上还是湿的，维修工说不是他们负责的。"></textarea>
+    </div>
+    <button class="p-btn" style="margin-top:10px" onclick="doConfirm(false)">提交给居委会</button>
+  </div>
+</div>
+{% endif %}
+
+{% if view['confirm_status'] == 'ok' %}
+<div class="p-card">
+  <p class="p-muted" style="margin:0;color:#1a7f4b">✓ 您已确认这件事解决。若之后又出现问题，可以再反映一次。</p>
+</div>
+{% elif view['confirm_status'] == 'disputed' %}
+<div class="p-card">
+  <p class="p-muted" style="margin:0;color:#b03131">
+    已收到您"没解决"的反馈，居委会正在核实。裁定结果会显示在下方事项中。
+  </p>
+</div>
+{% endif %}
+
+<div class="p-card">
+  <h2><span class="bar"></span>补充照片</h2>
+  <p class="p-muted" style="margin-top:0">
+    最多 5 张，单张 5MB 以内（JPG / PNG / WEBP）。
+    照片会做哈希存证——任何一方事后都无法替换。
+  </p>
+  {% if view['attachments'] %}
+  <div style="font-size:12.5px;color:var(--ink-2);margin-bottom:8px">
+    已上传 {{ view['attachments']|length }} 张：
+    {% for a in view['attachments'] %}<span style="color:var(--muted)">{{ a.name }}</span>{{ '、' if not loop.last }}{% endfor %}
+  </div>
+  {% endif %}
+  <div class="p-field">
+    <input type="file" id="photos" accept="image/*" multiple>
+  </div>
+  <button class="p-btn" style="margin-top:8px;background:#fff;color:var(--brand);border:1px solid var(--brand)"
+          onclick="uploadPhoto()">上传</button>
+</div>
+
+{% if ticket.status != 'done' %}
+<div class="p-card">
+  <p class="p-muted" style="margin:0">
+    承诺时限：紧急事项 4 小时、较急 24 小时、一般 72 小时内响应。
+    超时未处理的，系统会自动向街道督办。
+  </p>
+</div>
+{% endif %}
+
+<a class="p-btn" style="text-align:center;margin-bottom:12px;background:#fff;color:var(--brand);border:1px solid var(--brand)"
+   href="{{ url_for('portalviews.report') }}">再反映一件事</a>
+
+{% endblock %}
+
+{% block script %}
+<script>
+/* 转义：居民端没有内部站那套全局 esc，这里补一个。
+   用"不存在才定义"而不是直接 function esc(){} —— 函数声明会提升并
+   覆盖同名实现，一旦以后 base 里补了更强的版本，这里会把它悄悄顶掉。 */
+if(typeof window.esc !== 'function'){
+  window.esc = function(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  };
+}
+
+var TID = {{ ticket.id }};
+/* 争议类型由服务端下发：前端不再维护一份中文表，
+   否则新增一类争议时，服务端认、前端不显示，两个地方要各改一遍。 */
+var DTYPES = {{ view['dispute_types']|tojson }};
+var PICKED = '';
+
+(function initTags(){
+  var box = document.getElementById('dtags');
+  if(!box) return;
+  box.innerHTML = Object.keys(DTYPES).map(function(k){
+    return '<span class="tag tag-open" data-k="' + k + '" style="cursor:pointer;opacity:.75">'
+         + esc(DTYPES[k]) + '</span>';
+  }).join('');
+  box.querySelectorAll('[data-k]').forEach(function(el){
+    el.addEventListener('click', function(){
+      PICKED = el.getAttribute('data-k');
+      box.querySelectorAll('[data-k]').forEach(function(x){
+        x.style.background = ''; x.style.opacity = '.75';
+      });
+      el.style.background = '#fdeaea'; el.style.opacity = '1';
+    });
+  });
+})();
+
+function showDispute(){
+  document.getElementById('disputeBox').style.display = '';
+  document.getElementById('dnote').focus();
+}
+
+async function doConfirm(isOk){
+  var note = '';
+  if(!isOk){
+    note = (document.getElementById('dnote').value || '').trim();
+    if(note.length < 4){ alert('请说明哪里没解决（至少 4 个字）'); return; }
+  }
+  if(!isOk && !confirm('提交后居委会会介入核实，确认提交？')) return;
+  try{
+    var j = await api('/api/portal/ticket/' + TID + '/confirm', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ok: isOk, note: note, dispute_type: PICKED})
+    });
+    if(j.code !== 0){ alert(j.msg || '提交失败'); return; }
+    alert(j.data.msg || '已提交');
+    location.reload();
+  }catch(e){ alert(e.message || '网络异常，请稍后重试'); }
+}
+
+async function uploadPhoto(){
+  var el = document.getElementById('photos');
+  if(!el || !el.files || !el.files.length){ alert('请先选择照片'); return; }
+  var fd = new FormData();
+  for(var i = 0; i < el.files.length; i++) fd.append('photos', el.files[i]);
+  try{
+    // 不设 Content-Type：交给浏览器自动带上 multipart 的 boundary，
+    // 手写 'multipart/form-data' 反而会因为缺 boundary 让服务端解析不到文件。
+    var j = await api('/api/portal/ticket/' + TID + '/attach', {method: 'POST', body: fd});
+    if(j.code !== 0){ alert(j.msg || '上传失败'); return; }
+    if(j.data.errors && j.data.errors.length) alert(j.data.errors.join('；'));
+    location.reload();
+  }catch(e){ alert(e.message || '上传失败，请检查网络'); }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}FDE 首录台 · 极简减负平台{% endblock %}
+{% block page_title %}FDE 首录工作台{% endblock %}
+{% block page_sub %}一次录入 · 多方复用 · 全程留痕{% endblock %}
+
+{% block content %}
+<!-- 统计卡 -->
+<div class="card stat col-3">
+  <div class="ic" style="background:#e3edfb">📝</div>
+  <div><div class="num" id="stFde">-</div><div class="lbl">首录总次数</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#e0f5ea">♻️</div>
+  <div><div class="num" id="stReuse">-</div><div class="lbl">拆解业务项(条)</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#fdf0d7">⏱️</div>
+  <div><div class="num" id="stSaved">-</div><div class="lbl">本周节省工时（估算）</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#fbe4e4">🔐</div>
+  <div><div class="num" id="stSec">-</div><div class="lbl">敏感字段管控(个)</div></div>
+</div>
+
+<!-- FDE 首录台 -->
+<div class="card col-7">
+  <div class="card-h"><h2>📝 FDE 首录台</h2><span class="hint">用大白话说一遍，剩下的交给智能体</span></div>
+  <div class="card-b">
+    <textarea id="fdeInput" class="fde-input" placeholder="例如：2栋2单元202的张大爷反映楼道灯坏了，顺便登记他家新增一位租户李某，电话13800001234"></textarea>
+    <div class="btn-row" style="margin-top:12px">
+      <button class="btn btn-primary" id="btnSubmit" onclick="runFDE()">▶ 提交给智能体</button>
+      <button class="btn btn-ghost">🎤 语音录入</button>
+      <button class="btn btn-ghost">📷 拍照上传</button>
+    </div>
+    <div class="quick">试试示例：<a onclick="fillDemo(1)">报修+租户登记</a><a onclick="fillDemo(2)">独居老人走访</a><a onclick="fillDemo(3)">噪音纠纷调解</a></div>
+    <div class="timeline" id="flow" style="margin-top:20px;"></div>
+  </div>
+</div>
+
+<!-- 今日任务 -->
+<div class="card col-5 card-flex">
+  <div class="card-h"><h2 id="todayTitle">📋 今日任务</h2><span class="hint" id="todayHint">督办Agent 实时监控</span></div>
+  <div class="tw">
+    <table>
+      <thead><tr><th>事项</th><th>去向</th><th>状态</th></tr></thead>
+      <tbody id="todayBody">
+        <tr><td colspan="3" style="color:var(--muted)">读取中…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <!-- 状态分布：真实计数，与上面"今日 N 项"同源 -->
+  <div class="tstat" id="todayStat"></div>
+</div>
+
+<!-- 图表：数据全部现查（/api/fde/dashboard），不是写死的演示数字 -->
+<div class="card col-6">
+  <div class="card-h"><h2>📊 各业务线事项分布</h2><span class="hint" id="chart1Hint">本周 · 一条事项可派往多条线</span></div>
+  <div class="card-b"><div id="chart1"></div></div>
+</div>
+<div class="card col-6">
+  <div class="card-h"><h2>🤖 Agent 协作处理量趋势</h2><span class="hint" id="chart2Hint">本周一至今 · 按自然日</span></div>
+  <div class="card-b"><div id="chart2"></div></div>
+</div>
+
+<!-- 审计日志 -->
+<div class="card col-12">
+  <div class="card-h"><h2>🔐 保密与审计日志</h2><span class="hint">只追加 · 可追溯 · 不可篡改</span></div>
+  <div class="card-b"><div class="log" id="logBox">[系统] 审计日志就绪，等待操作…<br></div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- echarts 走本地静态资源：之前从 jsdelivr 拉，国内实测 2.9s，还卡在 head 里阻塞渲染。
+     现在只有真正画图的页面才加载它，并且带 mtime 版本号走一年 immutable 缓存。 -->
+<script src="{{ asset('vendor/echarts.min.js') }}"></script>
+<script>
+/* ---------- 图表 ----------
+   x 轴与数值一律来自 /api/fde/dashboard，模板里不写死任何数字。
+   之前这里写的是 data:[12,9,15,5,5]，还带了条根本不存在的业务线"城管"——
+   录十条新事项图表纹丝不动，一眼就能看出是摆设。 */
+const axisStyle={axisLine:{lineStyle:{color:'#d8dee9'}},axisLabel:{color:'#6b7a90'}};
+const emptyTip=t=>[{type:'text',left:'center',top:'middle',style:{text:t,fill:'#94a3b8',fontSize:13}}];
+const c1=echarts.init(document.getElementById('chart1'));
+c1.setOption({tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},grid:{left:36,right:16,top:24,bottom:26},
+  xAxis:{type:'category',data:[],...axisStyle},
+  yAxis:{type:'value',minInterval:1,splitLine:{lineStyle:{color:'#eef1f6'}},...axisStyle},
+  series:[{type:'bar',barWidth:30,data:[],label:{show:true,position:'top',color:'#206bc4'},
+    itemStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,
+      colorStops:[{offset:0,color:'#4299e1'},{offset:1,color:'#206bc4'}]},borderRadius:[5,5,0,0]}}]});
+const c2=echarts.init(document.getElementById('chart2'));
+c2.setOption({tooltip:{trigger:'axis'},legend:{bottom:0,textStyle:{color:'#6b7a90'},itemWidth:14},
+  grid:{left:36,right:16,top:20,bottom:46},
+  xAxis:{type:'category',data:[],...axisStyle},
+  yAxis:{type:'value',minInterval:1,splitLine:{lineStyle:{color:'#eef1f6'}},...axisStyle},
+  series:[
+    {name:'拆解',type:'line',smooth:true,symbolSize:6,data:[],itemStyle:{color:'#206bc4'},areaStyle:{color:'rgba(32,107,196,.08)'}},
+    {name:'派单',type:'line',smooth:true,symbolSize:6,data:[],itemStyle:{color:'#f59f00'}},
+    {name:'台账',type:'line',smooth:true,symbolSize:6,data:[],itemStyle:{color:'#2fb344'}}
+  ]});
+window.addEventListener('resize',()=>{c1.resize();c2.resize();});
+
+/* 今日任务：今日录入的业务项 + 其工单的流转状态 */
+function renderToday(t){
+  const tb=document.getElementById('todayBody');
+  document.getElementById('todayTitle').textContent=t.fallback?'📋 最近录入':'📋 今日任务';
+  document.getElementById('todayHint').textContent=t.fallback
+    ? '今日暂无录入 · 显示最近 '+t.count+' 条'
+    : '今日 '+t.count+' 项 · 督办Agent 实时监控';
+  if(!t.rows.length){
+    tb.innerHTML='<tr><td colspan="3" style="color:var(--muted)">今日还没有事项，在上方用大白话录一条试试</td></tr>';
+  } else {
+    tb.innerHTML=t.rows.map(r=>'<tr><td>'+esc(r.subject)
+      +'</td><td>'+esc(r.line||'—')
+      +'</td><td><span class="badge '+r.badge+'">'+esc(r.status)+'</span></td></tr>').join('');
+  }
+  const bs=t.by_status||{};
+  document.getElementById('todayStat').innerHTML=
+    ['待派发','已派单','办理中','已完成'].map(k=>
+      '<div><b>'+Number(bs[k]||0)+'</b><span>'+k+'</span></div>').join('');
+}
+
+/* 看板：统计卡 / 业务线分布 / 处理量趋势 / 今日任务，一次请求全拿 */
+async function loadDash(){
+  try{
+    const j=await api('/api/fde/dashboard');
+    if(j.code!==0){
+      // 不许静默 return：接口失败时页面会一直挂着"读取中"，
+      // 看起来像还在加载，实际早就断了。
+      document.getElementById('todayBody').innerHTML=
+        '<tr><td colspan="3" style="color:var(--red)">看板数据加载失败：'+esc(j.msg||'未知原因')+'</td></tr>';
+      document.getElementById('todayHint').textContent='数据未加载';
+      return;
+    }
+    const d=j.data,s=d.stats,L=d.lines,T=d.trend;
+    document.getElementById('stFde').textContent=s.fde_count;
+    document.getElementById('stReuse').textContent=s.item_count;
+    document.getElementById('stSec').textContent=s.secure_count;
+    const sv=document.getElementById('stSaved');
+    sv.textContent=s.saved_hours.toFixed(1)+'h';
+    // 悬浮说明口径：省了多少必须能对上怎么算的，否则就是个讨喜的数字
+    sv.title=s.saved_basis;
+    sv.parentNode.querySelector('.lbl').title=s.saved_basis;
+
+    const total1=L.counts.reduce((a,b)=>a+b,0);
+    c1.setOption({xAxis:{data:L.names},series:[{data:L.counts}],
+      graphic: total1?[]:emptyTip('本周暂无业务项')});
+    document.getElementById('chart1Hint').textContent=
+      '本周 '+d.week.start.slice(5)+' 起 · 合计 '+total1+' 项次 · 一条事项可派往多条线';
+
+    const total2=T.parsed.reduce((a,b)=>a+b,0)+T.dispatched.reduce((a,b)=>a+b,0)+T.ledger.reduce((a,b)=>a+b,0);
+    c2.setOption({xAxis:{data:T.labels},
+      series:[{data:T.parsed},{data:T.dispatched},{data:T.ledger}],
+      graphic: total2?[]:emptyTip('本周暂无处理记录')});
+    document.getElementById('chart2Hint').textContent=
+      '本周一至今 · 拆解 '+T.parsed.reduce((a,b)=>a+b,0)
+      +' / 派单 '+T.dispatched.reduce((a,b)=>a+b,0)
+      +' / 台账 '+T.ledger.reduce((a,b)=>a+b,0);
+
+    renderToday(d.today);
+  }catch(e){
+    // api() 已经弹了通道层提示条，这里把原因落到表格里，别停在一片空白
+    const tb=document.getElementById('todayBody');
+    if(tb) tb.innerHTML='<tr><td colspan="3" style="color:var(--red)">看板数据加载失败：'
+      +esc(e.message||'网络异常')+'</td></tr>';
+  }
+}
+loadDash();
+
+/* 示例 */
+const demos={
+  1:'2栋2单元202的张大爷反映楼道灯坏了，顺便登记他家新增一位租户李某，电话13800001234',
+  2:'今天走访了7栋的独居老人王奶奶，血压偏高已联系社区卫生站，下周复访',
+  3:'5栋302和402因装修噪音发生纠纷，已现场调解，双方同意装修限时作业'
+};
+function fillDemo(i){document.getElementById('fdeInput').value=demos[i];}
+
+function tlItem(color,no,name,badgeCls,badge,desc,meta){
+  const d=document.createElement('div');d.className='tl-item';
+  d.innerHTML=`<div class="tl-dot" style="background:${color}">${no}</div>
+    <b>${name}</b><span class="badge ${badgeCls}">${badge}</span>
+    <div class="desc">${desc}</div>${meta?`<div class="meta">${meta}</div>`:''}`;
+  document.getElementById('flow').appendChild(d);
+  requestAnimationFrame(()=>d.classList.add('show'));
+}
+function log(m){const lb=document.getElementById('logBox');lb.innerHTML=m+'<br>'+lb.innerHTML;}
+const now=()=>new Date().toTimeString().slice(0,8);
+
+/* 提交 → 真实后端 API（Orchestrator 串联保密审查+拆解） */
+async function runFDE(){
+  const t=document.getElementById('fdeInput').value.trim();
+  if(!t){alert('请先用大白话描述事项～');return;}
+  const box=document.getElementById('flow');box.innerHTML='';
+  const btn=document.getElementById('btnSubmit');btn.disabled=true;btn.textContent='智能体处理中…';
+  try{
+    const j=await api('/api/fde',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({raw_text:t})});
+    if(j.code!==0)throw new Error(j.msg);
+    const d=j.data;
+    let step=1;
+    tlItem('#d63939',step++,'保密审查Agent','b-red','脱敏',
+      d.sensitive_findings.length?`发现 ${d.sensitive_findings.length} 个敏感字段 → 已脱敏`:'未发现敏感字段',
+      esc(d.masked_text));
+    log(`[${now()}] <span class="ok">[保密审查Agent]</span> 敏感字段 ${d.sensitive_findings.length} 个已处理`);
+    setTimeout(()=>{
+      tlItem('#206bc4',step++,'拆解Agent','b-blue',d.llm_used?'本地LLM':'规则兜底',
+        `识别出 ${d.items.length} 个业务项`,
+        d.items.map((it,i)=>{
+          const sec=(it.security||[]).filter(s=>s.level>1);
+          const tag=sec.length
+            ? ` <span class="badge ${it.sec_max>=3?'b-red':'b-orange'}">${esc(sec.map(s=>s.field+'·'+s.level_name).join(' / '))}</span>`
+            : '';
+          return `${i+1}. ${esc(it.type)}：${esc(it.subject)}（→ ${esc((it.target_lines||[]).join('/'))}）${tag}`;
+        }).join('<br>'));
+      const lv3=d.items.reduce((n,it)=>n+(it.security||[]).filter(s=>s.level===3).length,0);
+      const lv2=d.items.reduce((n,it)=>n+(it.security||[]).filter(s=>s.level===2).length,0);
+      log(`[${now()}] <span class="ok">[拆解Agent]</span> 业务项 ${d.items.length} 条已入库 · 外网调用 0 次`);
+      if(lv2||lv3) log(`[${now()}] <span class="warn">[保密审查Agent]</span> 字段密级已落库：加密 ${lv3} 个 / 脱敏 ${lv2} 个`);
+      const kbItems = d.items.filter(it=>it.kb_hits && it.kb_hits.length);
+      if(kbItems.length){
+        const flat = kbItems.flatMap(it=>it.kb_hits);
+        const uniq = [...new Map(flat.map(h=>[h.title,h])).values()];
+        tlItem('#0ca678',step++,'知识库Agent','b-green','RAG 命中',
+          `为咨询类事项检索到 ${uniq.length} 篇政策依据`,
+          uniq.map(h=>`《${esc(h.title)}》 ${esc(h.heading)} <span style="color:var(--muted)">匹配 ${Math.round(h.score*100)}%</span>`).join('<br>')
+          + ` · <a href="/kb" style="color:var(--primary)">去知识库查看 →</a>`);
+        log(`[${now()}] <span class="ok">[知识库Agent]</span> 命中政策条款 ${uniq.length} 篇（本地检索，未出内网）`);
+      }
+    },500);
+    setTimeout(()=>{
+      if(d.orders && d.orders.length){
+        d.orders.forEach(o=>{
+          tlItem('#f59f00',step++,'派单Agent','b-orange','→ 物业',
+            `生成工单 ${esc(o.order_no)}（时限 ${o.sla_hours}h）`,
+            `推送至 ${esc(o.property_co)} · 内容已脱敏 · <a href="/orders" style="color:var(--primary)">去工单中心查看 →</a>`);
+          log(`[${now()}] <span class="warn">[派单Agent]</span> 工单 ${esc(o.order_no)} 已推送 ${esc(o.property_co)}`);
+        });
+      }
+      if(d.ledgers && d.ledgers.length){
+        const reused=d.ledgers.filter(l=>l.reused).length;
+        tlItem('#27ae60',step++,'填报Agent','b-green','→ 台账',
+          `自动写入 ${d.ledgers.length} 条台账（${d.ledgers.map(l=>l.line).join('/')}）`,
+          (reused?`其中 ${reused} 条复用历史档案，免重复采集 · `:'')+`<a href="/ledgers" style="color:var(--primary)">去台账中心查看 →</a>`);
+        log(`[${now()}] <span class="ok">[填报Agent]</span> 台账 ${d.ledgers.length} 条已写入，复用 ${reused} 条`);
+      }
+    },1000);
+    setTimeout(()=>{
+      tlItem('#2fb344',step++,'Orchestrator','b-green','已入库',`FDE 记录 #${d.fde_id} 全流程完成`,
+        '业务项/工单/台账均已落库，全程审计留痕');
+      log(`[${now()}] <span class="ok">[Orchestrator]</span> FDE#${d.fde_id} 处理完成`);
+      loadDash();
+    },1700);
+  }catch(e){
+    tlItem('#d63939','!','系统','b-red','错误','处理失败：'+esc(e.message),'');
+  }finally{
+    btn.disabled=false;btn.textContent='▶ 提交给智能体';
+  }
+}
+
+/* 提交成功后刷新看板：新录的事项应立刻出现在今日任务与两张图里 */
+</script>
+{% endblock %}

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1f5fd0">
+<title>{% block title %}幸福里 · 居民服务{% endblock %}</title>
+<!-- 内联 SVG 图标：不让浏览器为 /favicon.ico 吃一个 404（控制台报错会误导排查） -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231f5fd0'/%3E%3Ctext x='32' y='45' font-size='34' text-anchor='middle' fill='%23fff' font-family='sans-serif'%3E%E7%A4%BE%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="{{ asset('css/portal.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+{% set ep = request.endpoint or '' %}
+
+<div class="p-head">
+  <div class="p-head-row">
+    <div>
+      <div class="p-brand"><span class="dot"></span>幸福里 · 居民服务</div>
+      <div class="sub">{% block sub %}有事说一声，社区来办{% endblock %}</div>
+    </div>
+    <a class="p-staff" href="{{ url_for('views.login') }}">工作人员入口</a>
+  </div>
+</div>
+
+<main class="p-main">
+{% block body %}{% endblock %}
+</main>
+
+<footer class="p-foot">
+  本页面为居民服务入口，不采集与本事项无关的信息。<br>
+  提交后请保存 6 位查询码，凭手机号与查询码可随时查看办理进度。
+</footer>
+
+<nav class="p-nav">
+  <a href="{{ url_for('portalviews.home') }}" class="{{ 'on' if ep in ('portalviews.home',) else '' }}"><span class="ico">🏠</span>首页</a>
+  <a href="{{ url_for('portalviews.report') }}" class="{{ 'on' if ep == 'portalviews.report' else '' }}"><span class="ico">✍️</span>反映问题</a>
+  <a href="{{ url_for('portalviews.notices') }}" class="{{ 'on' if ep in ('portalviews.notices','portalviews.notice') else '' }}"><span class="ico">📢</span>公告</a>
+  <a href="{{ url_for('portalviews.my') }}" class="{{ 'on' if ep in ('portalviews.my','portalviews.ticket','portalviews.query') else '' }}"><span class="ico">📋</span>我的</a>
+</nav>
+<script>
+/* 居民端的请求封装，与内部站 base.html 的 window.api 保持同名同形状。
+ *
+ * 为什么不在居民页里直接写 fetch：
+ *   内部站的红线是"前端请求一律走 api()"，原因不是洁癖，而是裸 fetch 会
+ *   在网关返回 HTML 错误页时把 SyntaxError 当成业务错误抛出来，掩盖真实的 502/504。
+ *   居民端是公网入口，更容易撞上反代错误页，所以同样需要这层归一。
+ *
+ * 与内部站的两点差异：
+ *   1. 没有 .netbar 那个全局提示条（居民页没有这个 UI），失败用 alert 兜底；
+ *   2. 超时更短（20s）。居民在手机上看，等 60s 只会以为页面卡死。
+ *   返回值形状完全一致：{code, msg, data}，HTTP 非 2xx 不抛错——
+ *   因为"403 没权限"和"400 参数不对"本身就是要展示给用户的业务信息。
+ */
+window.api = function (url, opts) {
+  opts = Object.assign({}, opts || {});
+  var timeout = opts.timeout || 20000;
+  delete opts.timeout;
+  var ctrl = new AbortController();
+  opts.signal = ctrl.signal;
+  var tm = setTimeout(function () { ctrl.abort(); }, timeout);
+  return fetch(url, opts).then(function (r) {
+    clearTimeout(tm);
+    var ct = (r.headers.get('Content-Type') || '').toLowerCase();
+    if (ct.indexOf('json') < 0) {
+      throw new Error('服务暂时不可用（HTTP ' + r.status + '），请稍后重试');
+    }
+    return r.json();
+  }).catch(function (e) {
+    clearTimeout(tm);
+    if (e && e.name === 'AbortError') throw new Error('请求超时，请检查网络后重试');
+    throw e;
+  });
+};
+</script>
+{% block script %}{% endblock %}
+</body>
+</html>

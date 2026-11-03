@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}{{ doc.title }} · 公文{% endblock %}
+{% block page_title %}公文详情{% endblock %}
+{% block page_sub %}
+{{ labels.get(doc.doc_status or '', '未拟稿') }}　·　{{ doc.doc_type }}　·　{{ doc.doc_no or '未编号' }}
+{% endblock %}
+
+{% block content %}
+<div class="card col-12" style="margin-bottom:14px">
+  <div class="card-h" style="flex-wrap:wrap;gap:8px">
+    <h2>流转</h2>
+    <span class="hint">每一步都记人、记时、记状态</span>
+    <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+      {% if can('doc.manage') %}
+        {% if not doc.doc_no and doc.doc_status not in ('sent','archived') %}
+        <button class="btn btn-ghost" data-act="number">取文号</button>
+        {% endif %}
+        {% if doc.doc_status == 'draft' %}
+        <button class="btn btn-ghost" data-act="check">核稿</button>
+        {% endif %}
+        {% if doc.doc_status in ('draft','checked') %}
+        <button class="btn btn-primary" data-act="sign">签发</button>
+        {% endif %}
+        {% if doc.doc_status in ('checked','signed') %}
+        <button class="btn btn-ghost" data-act="reject">退回拟稿</button>
+        {% endif %}
+        {% if doc.doc_status == 'signed' %}
+        <button class="btn btn-primary" data-act="seal">用印</button>
+        {% endif %}
+        {% if doc.doc_status == 'sealed' %}
+        <button class="btn btn-primary" data-act="send">分发</button>
+        {% endif %}
+        {% if doc.doc_status == 'sent' %}
+        <button class="btn btn-ghost" data-act="archive">归档</button>
+        {% endif %}
+      {% endif %}
+      <button class="btn btn-ghost" onclick="window.print()">打印</button>
+      <a class="btn btn-ghost" href="{{ back }}">返回</a>
+    </div>
+  </div>
+  <div class="card-b">
+    <table>
+      <thead><tr><th style="width:110px">动作</th><th style="width:120px">经办人</th>
+        <th style="width:150px">时间</th><th style="width:170px">状态变化</th><th>说明</th></tr></thead>
+      <tbody>
+      {% for l in logs %}
+        <tr>
+          <td>{{ labels.get(l.action, l.action) }}</td>
+          <td>{{ l.actor or '—' }}</td>
+          <td style="font-size:12px">{{ l.created_at.strftime('%Y-%m-%d %H:%M') if l.created_at else '' }}</td>
+          <td style="font-size:12px">{{ l.from_status or '未拟稿' }} → {{ l.to_status }}</td>
+          <td style="font-size:12px;color:var(--muted)">{{ l.note or '' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" style="text-align:center;color:var(--muted)">尚无流转记录</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card col-12">
+  <div class="card-h"><h2>公文版式</h2>
+    <span class="hint">按 GB/T 9704 要素顺序；密级与紧急程度在版心左上角，抄送在版记</span></div>
+  <div class="card-b" style="background:#eef1f6;padding:18px">
+    <div class="paper">
+      <div class="mark">
+        {% if doc.secret_level %}<div>{{ doc.secret_level }}{% if doc.secret_until %}★{{ doc.secret_until.strftime('%Y-%m-%d') }}{% endif %}</div>{% endif %}
+        {% if doc.urgency and doc.urgency != '平件' %}<div>{{ doc.urgency }}</div>{% endif %}
+      </div>
+      <div class="redhead">{{ doc.issuer or '社区居委会' }}</div>
+      <div class="docno">{{ doc.doc_no or '（待编号）' }}</div>
+      {% if doc.doc_type in ('请示','报告') and doc.signer %}
+      <div class="signer">签发人：{{ doc.signer }}</div>
+      {% endif %}
+      <h1 class="dt">{{ doc.title }}</h1>
+      <div class="to">{{ doc.to_org or '' }}：</div>
+      <div class="body">{{ body | safe }}</div>
+      <div class="sign">
+        <div>{{ doc.issuer or '社区居委会' }}</div>
+        <div>{{ (doc.issued_at or doc.created_at).strftime('%Y年%m月%d日') }}</div>
+      </div>
+      {% if doc.doc_type in ('请示','报告') and doc.signer %}
+      <div class="foot">（联系人：{{ doc.signer }}）</div>
+      {% endif %}
+      <div class="banji">
+        <div>抄送：{{ doc.cc_org or '无' }}</div>
+        <div>{{ doc.issuer or '社区居委会' }}办公室　{{ (doc.issued_at or doc.created_at).strftime('%Y年%m月%d日') }}印发</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.paper{background:#fff;max-width:820px;margin:0 auto;padding:38px 46px;border-radius:6px;
+  border:1px solid #d8dee7;font-family:"FangSong","仿宋","Songti SC",serif;color:#1a1a1a;position:relative}
+.paper .mark{position:absolute;top:22px;left:34px;font-size:13px;color:#b02a2a;line-height:1.6}
+.paper .redhead{text-align:center;font-size:26px;letter-spacing:4px;color:#b02a2a;
+  font-family:"SimHei","黑体",sans-serif;padding:6px 0 10px}
+.paper .docno{text-align:center;font-size:14px;padding-bottom:6px;border-bottom:2px solid #b02a2a;
+  margin-bottom:22px}
+.paper .signer{text-align:right;font-size:14px;margin-top:-14px;margin-bottom:14px}
+.paper .dt{text-align:center;font-size:20px;font-weight:500;line-height:1.6;margin:8px 0 20px;
+  font-family:"SimHei","黑体",sans-serif}
+.paper .to{font-size:15px;margin-bottom:8px}
+.paper .body{font-size:15px;line-height:1.95}
+.paper .body :first-child{margin-top:0}
+.paper .body p{margin:0 0 10px;text-indent:2em}
+.paper .body h2,.paper .body h3{font-size:15px;margin:14px 0 6px;font-weight:500}
+.paper .body ul,.paper .body ol{margin:0 0 10px 2em}
+.paper .sign{text-align:right;font-size:15px;line-height:2;margin-top:34px}
+.paper .foot{font-size:13px;margin-top:10px}
+.paper .banji{margin-top:26px;padding-top:8px;border-top:1px solid #b02a2a;font-size:12px;
+  line-height:1.9;color:#333}
+@media print{
+  .sidebar,.topbar,.nav,.card-h,.navtoggle{display:none !important}
+  body{background:#fff}
+  .card{border:none;box-shadow:none}
+  .card-b{padding:0}
+  .paper{border:none;padding:0}
+  .card:first-child{display:none}
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var ID = {{ doc.id }};
+  var acts = document.querySelectorAll('[data-act]');
+  Array.prototype.forEach.call(acts, function (b) {
+    b.onclick = function () {
+      var act = b.getAttribute('data-act');
+      var label = b.textContent.trim();
+      var note = '';
+      if (act === 'number') { note = ''; }
+      else { note = prompt(label + '：可填备注（留空直接提交）', '') ; if (note === null) return; }
+      b.disabled = true;
+      var url = act === 'number' ? '/api/docs/' + ID + '/number'
+                                 : '/api/docs/' + ID + '/' + act;
+      var opt = act === 'number' ? { method: 'POST' }
+        : { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note: note || '' }) };
+      window.api(url, opt).then(function (j) {
+        b.disabled = false;
+        if (j.code !== 0) { alert(j.msg); return; }
+        location.reload();
+      }).catch(function () { b.disabled = false; });
+    };
+  });
+})();
+</script>
+{% endblock %}

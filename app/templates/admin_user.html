@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}管理 {{ u.name }} · 极简减负平台{% endblock %}
+{% block page_title %}管理账号：{{ u.name }}{% endblock %}
+{% block page_sub %}{{ u.username }} · {{ u.org }} · 创建于 {{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '-' }}{% endblock %}
+
+{% block content %}
+{% set st = u.status or 'active' %}
+
+<div class="card col-7">
+  <div class="card-h"><h2>👤 基本信息</h2></div>
+  <div class="card-b">
+    <div class="field"><label>登录账号</label>
+      <input class="inp" value="{{ u.username }}" disabled></div>
+    <div class="field"><label>真实姓名</label>
+      <input class="inp" id="fName" value="{{ u.name }}"></div>
+    <div class="field"><label>所属单位</label>
+      <input class="inp" id="fOrg" value="{{ u.org }}"></div>
+    <div class="field"><label>联系电话</label>
+      <input class="inp" id="fPhone" value="{{ u.phone or '' }}" disabled
+             placeholder="注册时填写，仅供核实"></div>
+
+    <div class="field"><label>角色</label>
+      <select class="inp" id="fRole">
+        {% for k, v in role_names.items() if k != 'resident' %}
+        <option value="{{ k }}" {{ 'selected' if k == u.role }}>{{ v }}</option>
+        {% endfor %}
+      </select>
+      <div class="hintline">改角色只改「默认权限包」，已单独勾过的权限不受影响。
+        {% if is_admin %}管理员恒定拥有全部权限，无法降权。{% endif %}</div>
+    </div>
+
+    <div class="field"><label>审核备注</label>
+      <input class="inp" id="fNote" value="{{ u.review_note or '' }}" placeholder="如：已电话核实，属幸福里社区新到岗网格员">
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button class="btn btn-primary" onclick="saveBase()">保存基本信息</button>
+      <a class="btn btn-ghost" href="{{ back }}">返回列表</a>
+    </div>
+  </div>
+</div>
+
+<div class="card col-5">
+  <div class="card-h"><h2>🚦 状态与安全</h2></div>
+  <div class="card-b">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span style="font-size:13px;color:#7b8fa7">当前状态</span>
+      {% if st == 'pending' %}<span class="badge b-orange">待审核</span>
+      {% elif st == 'disabled' %}<span class="badge b-gray">已停用</span>
+      {% else %}<span class="badge b-blue">正常</span>{% endif %}
+      <span style="font-size:12px;color:#8ba0b8;margin-left:auto">
+        权限 {{ effective|length }} 项
+      </span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:9px">
+      {% if st == 'pending' %}
+      <button class="btn btn-primary" onclick="approve()">✅ 通过审核并授权</button>
+      <div class="hintline" style="margin:0">
+        通过后按下方勾选的权限生效；若保持「跟随角色默认」，即授予
+        {{ role_names[u.role] }} 的全部 {{ role_perms[u.role]|length }} 项权限。
+      </div>
+      {% elif st == 'disabled' %}
+      <button class="btn btn-primary" onclick="setStatus('active')">恢复使用</button>
+      {% else %}
+      <button class="btn btn-ghost" onclick="setStatus('disabled')"
+              style="color:#c0392b;border-color:#f0c4c0">停用此账号</button>
+      {% endif %}
+      <button class="btn btn-ghost" onclick="resetPwd()">🔑 重置密码</button>
+    </div>
+
+    <div class="hintline" style="margin-top:14px">
+      停用后该账号立即失去全部业务权限并退出登录，但历史操作留痕全部保留——
+      社区系统的责任追溯不能因为人员离职而断掉。
+    </div>
+
+    <hr style="border:none;border-top:1px solid #eef2f8;margin:16px 0">
+    <div style="font-size:12px;color:#7b8fa7;line-height:1.9">
+      <div>创建方式：{{ u.created_by or '系统初始化' }}</div>
+      <div>最后登录：{{ u.last_login_at.strftime('%Y-%m-%d %H:%M') if u.last_login_at else '从未登录' }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card col-12">
+  <div class="card-h">
+    <h2>🔑 权限点</h2>
+    <div style="display:flex;align-items:center;gap:14px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#41556f;cursor:pointer">
+        <input type="checkbox" id="followRole" {{ 'checked' if follow_role }}
+               {{ 'disabled' if is_admin }} onchange="toggleFollow()">
+        跟随角色默认
+      </label>
+      <span style="font-size:12px;color:#8ba0b8" id="permCount"></span>
+    </div>
+  </div>
+  <div class="card-b">
+    {% if is_admin %}
+    <div class="hintline" style="margin:0 0 14px">
+      系统管理员恒定拥有全部 {{ perms|length }} 项权限，不能增减——
+      这是防止「管理员把自己锁在门外」的最后一道保险。
+    </div>
+    {% else %}
+    <div class="hintline" style="margin:0 0 14px">
+      勾上「跟随角色默认」时权限随角色走；取消后可按人精调，取消勾选即为降权。
+      权限保存后<strong>实时生效</strong>，对方不需要重新登录。
+    </div>
+    {% endif %}
+
+    <div class="pgrid">
+      {% for gname, items in groups %}
+      <div class="pgroup">
+        <div class="pgtitle">{{ gname }}</div>
+        {% for p in items %}
+        <label class="pitem">
+          <input type="checkbox" class="perm" value="{{ p }}"
+                 {{ 'checked' if p in effective }}
+                 {{ 'disabled' if is_admin or follow_role }}>
+          <span>
+            <b>{{ perms[p] }}</b>
+            <small>{{ p }}</small>
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if not is_admin %}
+    <div style="display:flex;gap:10px;margin-top:18px;align-items:center">
+      <button class="btn btn-primary" onclick="savePerms()">保存权限点</button>
+      <button class="btn btn-ghost" onclick="applyRoleDefault()">套用角色默认</button>
+      <button class="btn btn-ghost" onclick="pickAll()">全选</button>
+      <button class="btn btn-ghost" onclick="pickNone()">清空</button>
+      <span style="margin-left:auto;font-size:12px;color:#8ba0b8" id="saveTip"></span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.pgroup{border:1px solid #e8eef7;border-radius:10px;padding:12px 14px;background:#fbfdff}
+.pgtitle{font-size:12px;font-weight:700;color:#206bc4;margin-bottom:9px;letter-spacing:.02em}
+.pitem{display:flex;gap:9px;align-items:flex-start;padding:6px 0;cursor:pointer}
+.pitem input{margin-top:3px;width:15px;height:15px;flex:0 0 auto}
+.pitem b{display:block;font-size:13px;font-weight:500;color:#12263f;line-height:1.4}
+.pitem small{display:block;font-size:11px;color:#9aabbd;font-family:Consolas,monospace}
+.pitem input:disabled + span b{color:#7b8fa7}
+.hintline{font-size:12px;color:#8ba0b8;line-height:1.7;margin-top:6px}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const UID = {{ u.id }};
+const ROLE_DEFAULT = {{ role_perms[u.role]|list|sort|tojson }};
+const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
+
+function permsChecked() {
+  return Array.from(document.querySelectorAll('.perm:checked')).map(x => x.value);
+}
+function refreshCount() {
+  const n = permsChecked().length;
+  document.getElementById('permCount').textContent = '已选 ' + n + ' / {{ perms|length }} 项';
+}
+function toggleFollow() {
+  const follow = document.getElementById('followRole').checked;
+  document.querySelectorAll('.perm').forEach(x => { x.disabled = follow; });
+  if (follow) applyRoleDefault(true);
+  refreshCount();
+}
+function applyRoleDefault(silent) {
+  if (!IS_ADMIN && !silent) {
+    // 手动套用角色默认 = 明确要按角色走，顺便把"跟随角色"打开更符合直觉
+    document.getElementById('followRole').checked = false;
+    document.querySelectorAll('.perm').forEach(x => { x.disabled = false; });
+  }
+  document.querySelectorAll('.perm').forEach(x => {
+    x.checked = ROLE_DEFAULT.includes(x.value);
+  });
+  refreshCount();
+  if (!silent) tip('已套用 {{ role_names[u.role] }} 的默认权限，记得点保存');
+}
+function pickAll()  {
+  document.getElementById('followRole').checked = false;
+  document.querySelectorAll('.perm').forEach(x => {x.disabled=false; x.checked=true});
+  refreshCount();
+}
+function pickNone() {
+  document.getElementById('followRole').checked = false;
+  document.querySelectorAll('.perm').forEach(x => {x.disabled=false; x.checked=false});
+  refreshCount();
+}
+function tip(msg, bad) {
+  const el = document.getElementById('saveTip');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = bad ? '#c0392b' : '#1e8e5a';
+  setTimeout(() => { el.textContent = ''; }, 4000);
+}
+
+async function post(url, body) {
+  // 这里不再判断 r.ok：api() 已经把「连不上/超时/回的不是 JSON」统一处理并弹提示条，
+  // 剩下只有"服务端答了但业务拒绝"（code!=0）需要翻译成异常，交给调用方的 try/catch。
+  const j = await api(url, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body || {})
+  });
+  if (j.code !== 0) throw new Error(j.msg || '保存失败');
+  return j.data;
+}
+
+async function saveBase() {
+  try {
+    await post('/api/admin/users/' + UID, {
+      name: document.getElementById('fName').value,
+      org: document.getElementById('fOrg').value,
+      role: document.getElementById('fRole').value,
+      review_note: document.getElementById('fNote').value
+    });
+    alert('已保存');
+    location.reload();
+  } catch (e) { alert('保存失败：' + e.message); }
+}
+
+async function savePerms() {
+  const follow = document.getElementById('followRole').checked;
+  try {
+    const d = await post('/api/admin/users/' + UID, {
+      perms: follow ? null : permsChecked()
+    });
+    tip('已保存，当前生效 ' + d.perm_count + ' 项权限');
+    setTimeout(() => location.reload(), 900);
+  } catch (e) { tip('保存失败：' + e.message, true); }
+}
+
+async function approve() {
+  const follow = document.getElementById('followRole').checked;
+  try {
+    const d = await post('/api/admin/users/' + UID + '/approve', {
+      role: document.getElementById('fRole').value,
+      perms: follow ? null : permsChecked()
+    });
+    alert('已通过审核，授予 ' + d.perm_count + ' 项权限。对方下次点击即生效。');
+    location.reload();
+  } catch (e) { alert('操作失败：' + e.message); }
+}
+
+async function setStatus(st) {
+  const msg = st === 'disabled'
+    ? '停用后该账号立即失去全部权限。确认停用？'
+    : '恢复后该账号将按现有权限重新可用。确认恢复？';
+  if (!confirm(msg)) return;
+  try {
+    await post('/api/admin/users/' + UID, {status: st});
+    location.reload();
+  } catch (e) { alert('操作失败：' + e.message); }
+}
+
+async function resetPwd() {
+  const p = prompt('设置临时密码（至少 8 位），并线下告知本人：');
+  if (!p) return;
+  try {
+    await post('/api/admin/users/' + UID + '/password', {password: p});
+    alert('密码已重置，请提醒本人首次登录后修改。');
+  } catch (e) { alert('重置失败：' + e.message); }
+}
+
+refreshCount();
+</script>
+{% endblock %}

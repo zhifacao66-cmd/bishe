@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}工作周报 · 极简减负平台{% endblock %}
+{% block page_title %}工作周报{% endblock %}
+{% block page_sub %}
+按自然周（周一至周日）取数；数字由服务端统计，明细可逐条核对；签发后冻结，改动出新版本
+{% endblock %}
+
+{% block content %}
+<div class="card col-12">
+  <div class="card-h" style="flex-wrap:wrap;gap:8px">
+    <h2>📅 周期</h2>
+    <span class="hint">数字来自收文、工单、台账、任务、居民诉求，同一次查询产生</span>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input class="inp" id="period" type="week" style="width:180px">
+      <button class="btn btn-ghost" id="btnLoad">查询</button>
+      {% if can('weekly.manage') %}
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px">
+        <input type="checkbox" id="useLlm"> 模型起草「存在问题 / 下周计划」
+      </label>
+      <button class="btn btn-primary" id="btnGen">生成周报</button>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card-b">
+    <div id="tip" style="font-size:12px;color:var(--muted);padding-bottom:10px"></div>
+    <table>
+      <thead><tr>
+        <th style="width:110px">版本</th><th style="width:90px">状态</th>
+        <th style="width:120px">改稿人</th><th style="width:150px">生成时间</th>
+        <th style="width:140px">签发人</th><th>操作</th>
+      </tr></thead>
+      <tbody id="tbody"><tr><td colspan="6" style="text-align:center;color:var(--muted)">加载中…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card col-12">
+  <div class="card-h"><h2>近期周报</h2><span class="hint">按周倒序，最多 12 周</span></div>
+  <div class="card-b" id="history" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var cur = new URLSearchParams(location.search).get('period') || '';
+
+  function weekOf(d) {
+    var t = new Date(d); t.setHours(0, 0, 0, 0);
+    t.setDate(t.getDate() + 3 - (t.getDay() + 6) % 7);
+    var w1 = new Date(t.getFullYear(), 0, 4);
+    var n = 1 + Math.round(((t - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7);
+    return t.getFullYear() + '-W' + (n < 10 ? '0' + n : n);
+  }
+
+  if (cur) $('period').value = cur; else $('period').value = weekOf(new Date());
+
+  function load() {
+    var p = $('period').value;
+    if (!p) { alert('请选择周期'); return; }
+    window.api('/api/weekly?period=' + encodeURIComponent(p)).then(function (j) {
+      if (j.code !== 0) { alert(j.msg); return; }
+      var d = j.data;
+      $('tip').textContent = '周期 ' + d.period + ' 共 ' + d.items.length + ' 份';
+      var tb = $('tbody');
+      if (!d.items.length) {
+        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">' +
+          '这一周还没有周报，点右上角「生成周报」' + '</td></tr>';
+      } else {
+        tb.innerHTML = d.items.map(function (w) {
+          return '<tr>' +
+            '<td>第 ' + w.revision + ' 版</td>' +
+            '<td>' + (w.status === 'final'
+              ? '<span style="color:#0f6e56">已签发</span>'
+              : '<span style="color:#c47d0a">草稿</span>') + '</td>' +
+            '<td>' + esc(w.editor || '—') + '</td>' +
+            '<td style="font-size:12px">' + esc(w.created_at) + '</td>' +
+            '<td>' + esc(w.signed_by || '—') + '</td>' +
+            '<td><a href="/weekly/' + w.id + '">查看 / 编辑 →</a></td>' +
+          '</tr>';
+        }).join('');
+      }
+      $('history').innerHTML = (d.history || []).map(function (h) {
+        return '<a class="btn btn-ghost" style="padding:4px 12px;font-size:12px" ' +
+          'href="/weekly?period=' + encodeURIComponent(h.period) + '">' +
+          esc(h.period) + ' · ' + h.count + ' 份</a>';
+      }).join('') || '<span style="color:var(--muted);font-size:12px">暂无历史</span>';
+    });
+  }
+
+  $('btnLoad').onclick = load;
+  if ($('btnGen')) {
+    $('btnGen').onclick = function () {
+      var p = $('period').value;
+      if (!p) { alert('请选择周期'); return; }
+      var btn = this; btn.disabled = true; btn.textContent = '生成中…';
+      window.api('/api/weekly/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period: p, polish: $('useLlm').checked }),
+        timeout: 120000
+      }).then(function (j) {
+        btn.disabled = false; btn.textContent = '生成周报';
+        if (j.code !== 0) { alert(j.msg); return; }
+        location.href = '/weekly/' + j.data.id;
+      }).catch(function () { btn.disabled = false; btn.textContent = '生成周报'; });
+    };
+  }
+  load();
+})();
+</script>
+{% endblock %}

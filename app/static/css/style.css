@@ -1,0 +1,383 @@
+/* 跨页导航做淡入淡出：支持 View Transitions 的浏览器（Chrome/Edge 111+）
+   里切页不再是"白屏→硬切"，观感接近本机应用；不支持的浏览器自动忽略。 */
+@view-transition { navigation: auto; }
+
+:root{
+  --primary:#206bc4; --primary-dark:#1a569d; --bg:#f5f7fb; --card:#ffffff;
+  --border:#e6e9f0; --text:#1f2937; --muted:#6b7a90; --green:#2fb344;
+  --orange:#f59f00; --red:#d63939; --teal:#0ca678;
+  --radius:10px; --shadow:0 1px 3px rgba(31,41,55,.06),0 1px 2px rgba(31,41,55,.04);
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:"Microsoft YaHei","PingFang SC",-apple-system,sans-serif;}
+body{background:var(--bg);color:var(--text);font-size:14px;display:flex;min-height:100vh;}
+
+.sidebar{width:230px;background:#fff;border-right:1px solid var(--border);flex-shrink:0;
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+.brand{padding:20px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.brand-logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--primary),#4299e1);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;}
+.brand b{font-size:14px;} .brand small{display:block;color:var(--muted);font-size:11px;font-weight:400;}
+.nav{padding:12px 10px;flex:1;}
+.nav-label{font-size:11px;color:var(--muted);padding:10px 12px 6px;letter-spacing:1px;}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:#3b4a5e;
+  text-decoration:none;font-size:13px;margin-bottom:2px;}
+.nav a .ico{width:18px;text-align:center;}
+.nav a:hover{background:#f1f5fb;color:var(--primary);}
+.nav a.active{background:#e8f1fc;color:var(--primary);font-weight:600;}
+.nav a .cnt{margin-left:auto;background:#e8f1fc;color:var(--primary);font-size:11px;border-radius:10px;padding:1px 7px;}
+.side-foot{padding:14px 18px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);}
+.side-foot .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:6px;}
+/* 状态灯三态：绿=探活通过，橙=未探活/检测中，红=连不上。
+   一直绿是最糟的设计——模型挂了页面还在替它报平安，值班的人会先去怀疑自己的操作。 */
+.side-foot .dot.idle{background:var(--muted);animation:pulse 1.4s ease-in-out infinite;}
+.side-foot .dot.bad{background:var(--red);box-shadow:0 0 0 3px rgba(214,57,57,.15);}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+.side-foot-more{display:inline-block;margin-top:6px;color:var(--primary);font-size:11px;
+  text-decoration:none;opacity:.85;}
+.side-foot-more:hover{opacity:1;text-decoration:underline;}
+
+.main{flex:1;min-width:0;}
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:14px 28px;
+  display:flex;align-items:center;justify-content:space-between;}
+.topbar h1{font-size:16px;font-weight:600;}
+.topbar .sub{color:var(--muted);font-size:12px;margin-top:2px;}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#e6f6ee;color:var(--teal);
+  border:1px solid #bfe8d6;padding:4px 12px;border-radius:20px;font-size:12px;}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--primary);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:13px;}
+.content{padding:24px 28px;display:grid;grid-template-columns:repeat(12,1fr);gap:18px;}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  box-shadow:var(--shadow);overflow:hidden;}
+.card-h{padding:15px 18px;border-bottom:1px solid var(--border);display:flex;
+  align-items:center;justify-content:space-between;gap:10px;}
+.card-h h2{font-size:14px;font-weight:600;flex-shrink:0;}
+/* 说明文字可伸缩：标题 + 说明 + 右侧按钮三者挤在一行时，
+   不给 hint 设 min-width:0，它会被压成 0 宽而文字溢出到标题上 */
+.card-h .hint{font-size:12px;color:var(--muted);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.card-b{padding:18px;}
+/* 内容比同排卡片矮时（比如今天只录了 1 条），让表体撑开、小结贴底，
+   否则卡片下半截空着一大片，像没加载完 */
+.card-flex{display:flex;flex-direction:column;}
+.card-flex .tw{flex:1;}
+.tstat{display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--border);}
+.tstat>div{flex:1;text-align:center;background:#f8fafc;border-radius:8px;padding:8px 4px;min-width:0;}
+.tstat b{display:block;font-size:15px;line-height:1.2;}
+.tstat span{font-size:11px;color:var(--muted);}
+.col-7{grid-column:span 7;} .col-6{grid-column:span 6;}
+.col-5{grid-column:span 5;} .col-12{grid-column:span 12;}
+
+.stat{padding:18px;display:flex;gap:14px;align-items:center;}
+.stat .ic{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;
+  justify-content:center;font-size:20px;flex-shrink:0;}
+.stat .num{font-size:24px;font-weight:700;line-height:1.1;}
+.stat .lbl{font-size:12px;color:var(--muted);}
+.stat .trend{margin-left:auto;font-size:12px;font-weight:600;}
+
+.fde-input{width:100%;min-height:92px;border:1.5px solid var(--border);border-radius:9px;
+  padding:12px 14px;font-size:14px;resize:vertical;outline:none;background:#fbfcfe;}
+.fde-input:focus{border-color:var(--primary);background:#fff;box-shadow:0 0 0 3px rgba(32,107,196,.12);}
+.btn{border:none;border-radius:8px;padding:8px 18px;font-size:13px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--primary);color:#fff;}
+.btn-primary:hover{background:var(--primary-dark);}
+.btn-ghost{background:#f1f4f9;color:#4a5b70;}
+.btn-row{display:flex;gap:10px;}
+.btn-ghost:hover{background:#e6ebf3;}
+.quick{margin-top:10px;font-size:12px;color:var(--muted);}
+.quick a{color:var(--primary);cursor:pointer;text-decoration:none;margin-right:12px;}
+.quick a:hover{text-decoration:underline;}
+
+.timeline{margin-top:6px;position:relative;padding-left:26px;}
+.timeline::before{content:"";position:absolute;left:9px;top:8px;bottom:8px;width:2px;background:var(--border);}
+.tl-item{position:relative;padding:0 0 18px 12px;opacity:0;transform:translateY(10px);transition:all .5s ease;}
+.tl-item.show{opacity:1;transform:none;}
+.tl-dot{position:absolute;left:-26px;top:2px;width:20px;height:20px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;}
+.tl-item b{font-size:13px;}
+.tl-item .desc{font-size:12.5px;color:#3b4a5e;margin-top:3px;}
+.tl-item .meta{font-size:12px;color:var(--muted);margin-top:3px;background:#f8fafc;
+  border:1px solid var(--border);border-radius:7px;padding:7px 10px;}
+.badge{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;margin-left:6px;font-weight:500;}
+.b-blue{background:#e3edfb;color:var(--primary);} .b-red{background:#fbe4e4;color:var(--red);}
+.b-orange{background:#fdf0d7;color:#b37700;} .b-green{background:#e0f5ea;color:#1e8e5a;}
+.b-gray{background:#eef1f6;color:#5b6675;}
+
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;color:var(--muted);font-weight:500;font-size:12px;padding:9px 18px;
+  border-bottom:1px solid var(--border);background:#fafbfd;}
+td{padding:11px 18px;border-bottom:1px solid #f0f2f7;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#fafbfe;}
+
+.log{font-family:Consolas,Monaco,monospace;font-size:12px;background:#101c2c;color:#8fc3f0;
+  border-radius:9px;padding:14px 16px;max-height:190px;overflow:auto;line-height:1.9;}
+.log .ok{color:#4ade80;} .log .warn{color:#fbbf24;}
+#chart1,#chart2{width:100%;height:260px;}
+
+/* ---------- 顶栏用户区（三角色） ---------- */
+.userbox{display:flex;align-items:center;gap:9px;padding-left:14px;border-left:1px solid var(--border);}
+.userbox .uinfo b{font-size:12.5px;display:flex;align-items:center;gap:6px;}
+.userbox .uinfo small{display:block;font-size:11px;color:var(--muted);margin-top:2px;}
+.role-chip{font-size:10.5px;font-weight:500;padding:1px 7px;border-radius:9px;white-space:nowrap;}
+.r-community{background:#e3edfb;color:var(--primary);}
+.r-property{background:#fdf0d7;color:#a06a00;}
+.r-street{background:#e0f5ea;color:#1e8e5a;}
+.r-admin{background:#efe6fb;color:#6b3fb5;}
+.logout{background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:7px;padding:5px 11px;font-size:12px;cursor:pointer;font-family:inherit;}
+.logout:hover{border-color:#f0bcbc;color:var(--red);background:#fdf3f3;}
+
+/* ---------- 403 页面 ---------- */
+.forbid{padding:56px 24px;text-align:center;}
+.forbid-ico{font-size:44px;margin-bottom:14px;}
+.forbid h2{font-size:17px;font-weight:600;}
+.forbid p{color:#3b4a5e;font-size:13px;margin-top:12px;line-height:1.8;}
+.forbid p b{color:var(--primary);}
+.forbid .mini{color:var(--muted);font-size:12px;}
+.forbid-act{margin-top:22px;}
+.forbid-act .btn{text-decoration:none;}
+
+.col-3{grid-column:span 3;}
+.col-4{grid-column:span 4;} .col-8{grid-column:span 8;}
+
+/* ---------- 表单多列表格 ----------
+   原先这几处是行内 style="grid-template-columns:2fr 1fr 1fr"，行内样式
+   外部 CSS 压不动，窄屏只能一格一格挤着。改成类，媒体查询才接管得到。 */
+.fgrid{display:grid;gap:10px;}
+.fgrid-2{grid-template-columns:1fr 1fr;}
+.fgrid-3{grid-template-columns:repeat(3,1fr);}
+.fgrid-21{grid-template-columns:2fr 1fr 1fr;}
+
+/* ---------- 通用表单控件（知识库/任务看板共用） ---------- */
+.inp{width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px 11px;
+  font-size:13px;font-family:inherit;color:var(--text);background:#fbfcfe;outline:none;}
+.inp:focus{border-color:var(--primary);background:#fff;box-shadow:0 0 0 3px rgba(32,107,196,.12);}
+select.inp{cursor:pointer;}
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;}
+
+/* 表单多列排布：桌面自动折行、窄屏一律单列。
+   必须写在 CSS 里而不是模板的 style 属性上——行内 grid-template-columns
+   的优先级让窄屏断点压不动它，375px 上会横向溢出（smoke_mobile 拦这一条）。 */
+.frow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+@media (max-width:640px){
+  .frow{grid-template-columns:1fr;}
+}
+
+/* ---------- 任务看板 ---------- */
+.tk-row{display:flex;gap:10px;}
+.tk-row>*{flex:1;}
+.tk-title{font-size:13.5px;font-weight:600;color:var(--text);}
+.tk-detail{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.6;}
+.tk-prog{height:4px;border-radius:2px;background:#eef1f6;margin-top:6px;overflow:hidden;}
+.tk-prog i{display:block;height:100%;border-radius:2px;}
+
+/* ---------- 请求失败提示条（base.html 的 api() 统一触发） ----------
+   固定定位、挂在 body 上：**不能放进 .content**——那里是 12 栏网格，
+   插一个非卡片元素会自己占掉一列，把所有卡片挤到下一行。
+   z-index 要高于手机抽屉(60)和遮罩(55)，否则窄屏上提示被抽屉盖住，
+   等于没提示（这正是它要解决的问题）。 */
+.netbar{position:fixed;top:12px;left:50%;z-index:90;
+  display:flex;align-items:center;gap:10px;max-width:min(92vw,560px);
+  padding:10px 12px;border-radius:10px;background:#fff;
+  border:1px solid #f3c9c9;box-shadow:0 10px 26px rgba(31,41,55,.16);
+  font-size:13px;color:var(--text);line-height:1.5;
+  transform:translateX(-50%) translateY(-160%);      /* 默认移出屏幕，不占位 */
+  transition:transform .22s cubic-bezier(.32,.72,.28,1);}
+.netbar.show{transform:translateX(-50%) translateY(0);}
+.netbar .dot{width:8px;height:8px;border-radius:50%;background:var(--red);
+  flex-shrink:0;box-shadow:0 0 0 3px rgba(214,57,57,.15);}
+.netbar-t{flex:1;min-width:0;}
+.netbar button{border:0;background:#f4f6fa;color:var(--text);font-family:inherit;
+  font-size:12px;padding:6px 10px;border-radius:7px;cursor:pointer;white-space:nowrap;}
+.netbar button:hover{background:#e8eef7;}
+.netbar button.netbar-retry{background:var(--primary);color:#fff;}
+.netbar button.netbar-retry:hover{background:var(--primary-dark);}
+.netbar button.netbar-x{background:transparent;color:var(--muted);font-size:16px;
+  line-height:1;padding:2px 6px;}
+.netbar button.netbar-x:hover{background:#f4f6fa;}
+
+/* ---------- 分页条 ----------
+   "共 N 条" 靠左、翻页键靠右：数字是判断"要不要翻"的依据，
+   放在按钮左边会让人先看到按钮再看到依据。 */
+.pgbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  justify-content:flex-end;padding-top:12px;}
+.pg-sum{margin-right:auto;font-size:12px;color:var(--muted);}
+.pg-info{font-size:12px;color:var(--muted);min-width:54px;text-align:center;}
+.pgbar .btn{padding:4px 14px;font-size:12px;}
+.pgbar .btn:disabled{opacity:.45;cursor:not-allowed;}
+
+@media (max-width:640px){
+  .pg-sum{width:100%;margin:0;}
+  .pgbar{justify-content:space-between;}
+  /* 手机上按钮要够大才点得准（<40px 基本点不中） */
+  .pgbar .btn{min-height:40px;padding:8px 16px;}
+  .pg-info{min-width:0;}
+}
+
+/* ================================================================
+   窄屏适配（手机/小平板）
+   ----------------------------------------------------------------
+   桌面布局的前提是"侧栏 230px 固定 + 正文 12 栏网格"，在 375px 的手机上
+   正文只剩约 145px，表格和卡片全部挤成一团。这里不改桌面规则，只在断点
+   内覆盖，保证两套布局互不影响。
+
+   断点选 900px：1024 的横屏平板减掉侧栏还有 794px，12 栏仍然成立；
+   一旦窄于 900，col-5/col-7 只剩 300px 上下，就必须单列了。
+   ================================================================ */
+
+/* 横屏时 iOS 会自作主张放大字号，这行是唯一能关掉它的开关 */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+*{-webkit-tap-highlight-color:transparent;}
+
+/* 表格横向滑动容器：9 张表在手机上必然超宽，宁可让表格自己滑，
+   也不要它把整个页面撑出横向滚动条（那样连侧栏都会跟着漂） */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
+.tw table{min-width:100%;}
+
+/* 汉堡按钮：桌面隐藏，窄屏才出现 */
+.navtoggle{display:none;width:40px;height:40px;flex-shrink:0;border:1px solid var(--border);
+  background:#fff;border-radius:9px;cursor:pointer;padding:0;
+  flex-direction:column;align-items:center;justify-content:center;gap:4px;}
+.navtoggle span{display:block;width:17px;height:2px;border-radius:2px;background:#3b4a5e;}
+.navtoggle:active{background:#f1f5fb;}
+.side-mask{position:fixed;inset:0;background:rgba(16,28,44,.46);z-index:55;}
+
+.topbar-t{min-width:0;}
+.topbar-r{display:flex;align-items:center;gap:14px;flex-shrink:0;}
+
+@media (max-width:900px){
+  body{display:block;}
+
+  /* ---- 侧栏改成覆盖式抽屉 ---- */
+  .sidebar{position:fixed;left:0;top:0;bottom:0;height:100vh;height:100dvh;
+    width:min(80vw,304px);z-index:60;transform:translateX(-100%);
+    transition:transform .24s cubic-bezier(.32,.72,.28,1);
+    box-shadow:0 0 34px rgba(16,28,44,.2);overflow-y:auto;overscroll-behavior:contain;}
+  .nav-open .sidebar{transform:none;}
+  /* 横屏刘海机型：抽屉贴底的状态灯会被圆角和 Home 条压住 */
+  .sidebar .side-foot{padding-bottom:calc(14px + env(safe-area-inset-bottom));}
+  .nav-open .side-mask{display:block;}
+  /* 抽屉打开时压住背景滚动，否则手指在遮罩上滑会把下面那页滚走 */
+  .nav-open{overflow:hidden;}
+  .side-mask[hidden]{display:none;}
+
+  /* ---- 顶栏：留出汉堡位，右侧只留头像和退出 ---- */
+  .main{min-height:100vh;min-height:100dvh;}
+  .topbar{padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top));gap:10px;}
+  .navtoggle{display:flex;}
+  .topbar h1{font-size:15px;}
+  .topbar .sub{font-size:11.5px;}
+  .topbar .chip{display:none;}          /* 保密模式是常驻状态，手机上不占这行 */
+  .topbar-r{gap:8px;}
+  .userbox{padding-left:0;border-left:none;gap:7px;}
+  .userbox .uinfo{display:none;}        /* 名字在头像里已经有了 */
+  .avatar{width:32px;height:32px;}
+  .logout{padding:6px 10px;min-height:34px;}
+
+  /* ---- 正文：12 栏塌成两列，卡片一律满宽，只有统计卡两两并排 ---- */
+  .content{padding:14px;gap:12px;grid-template-columns:repeat(2,1fr);}
+  /* span 7 这类跨栏在 2 列网格里会生成隐式列、把整页撑出横向滚动，必须压平 */
+  .content>*{grid-column:1/-1;min-width:0;}
+  /* 统计卡（col-3 / col-4）排成 2×2，一列一个要滚四屏才看完；
+     其余卡片一律占满一行 */
+  .content>.card.col-3,
+  .content>.card.col-4,
+  .content>.card.stat{grid-column:span 1;}
+
+  .card-h{padding:12px 14px;flex-wrap:wrap;row-gap:6px;}
+  .card-h .hint{white-space:normal;overflow:visible;text-overflow:clip;
+    flex-basis:100%;font-size:11.5px;line-height:1.55;}
+  .card-b{padding:14px;}
+
+  /* 统计卡片：两列排，别一列一个占满屏 */
+  .content>.card .stat{padding:13px 14px;gap:10px;}
+  .stat .ic{width:38px;height:38px;font-size:17px;}
+  .stat .num{font-size:20px;}
+  .stat .trend{font-size:11px;}
+
+  /* ---- 表格 ----
+     表格在手机上一定超宽，光给个滚动容器不够：用户看不出右边还有内容。
+     这层 background 是"滚动阴影"——内容没滑到边时该侧出现淡阴影，
+     滑到头阴影自动消失（靠 background-attachment:local 实现，纯 CSS 无脚本）。 */
+  .tw{
+    /* 内阴影画在容器内边缘、不随内容滚动，滑到头也还在——
+       它只是个"这边还有内容"的静态提示，不是精确的滚动位置指示器。
+       比纯 CSS 的 scroll-shadow 稳：那套靠 background-attachment 叠层，
+       表格自带背景色（如表头 #fafbfd）时会把它整块盖掉。 */
+    box-shadow:inset -16px 0 14px -14px rgba(16,28,44,.35),
+               inset 16px 0 14px -14px rgba(16,28,44,.16);
+  }
+  th{padding:8px 12px;white-space:nowrap;}
+  td{padding:10px 12px;}
+  /* 表格宽度交给内容决定：短列（状态/时限/操作）按内容收缩成一行，
+     长文本列最多 200px 折两三行。用 width:100% 会被容器压平，工单号
+     这种 13 位串会被切成两截，"内容"列则折成四行——比横滑更难读。 */
+  .tw table{width:max-content;}
+  .tw th,.tw td{max-width:170px;}
+  /* 手机上"操作"列塞了 3 个按钮，不换行就会被裁掉半边 */
+  td .btn,td button{white-space:nowrap;}
+
+  /* ---- 触摸目标：苹果 HIG 下限 44px，原先 32px 的按钮在拇指下很难点中 ---- */
+  .btn{min-height:40px;padding:9px 16px;white-space:nowrap;}
+  /* 一行放不下时整颗按钮掉到下一行，而不是把"提交给智能体"折成两行 */
+  .btn-row{flex-wrap:wrap;}
+  .inp,.logout,select.inp{min-height:40px;}
+  /* 16px 是 iOS 的自动放大阈值：小于它，一点输入框整页就放大且不还原 */
+  .inp,.fde-input,input,select,textarea{font-size:16px;}
+  .fde-input{min-height:96px;}
+
+  /* 台账 220px / 工单 250px 是行内写死的宽度，窄屏一律拉满整行 */
+  .content input.fde-input,
+  .content input[type=search],
+  .card-h .inp{width:100%!important;}
+
+  /* ---- 弹窗：手机上铺满，别再是桌面那个 640px 居中小窗 ----
+     只挂 .show 上：`.modal` 本身是 display:none，而页面内 <style> 比本文件
+     晚加载、同优先级必胜——写 `.modal{display:flex}` 会把这层的弹窗全部
+     默认打开。.modal.show 特异性更高，才压得住。 */
+  .modal.show{align-items:flex-end;padding:0;}
+  .modal-box{max-width:100%!important;width:100%!important;
+    max-height:92vh;max-height:92dvh;border-radius:12px 12px 0 0;}
+  .modal-h{padding:13px 14px!important;}
+  .modal-body{padding:14px!important;}
+  .modal-f{padding:10px 14px!important;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom))!important;}
+  .modal-meta{padding:9px 14px!important;}
+
+  /* ---- 图表 ---- */
+  #chart1,#chart2{height:230px;}
+}
+
+@media (max-width:640px){
+  .content{padding:10px;gap:10px;}
+  .card-h{padding:11px 12px;}
+  .card-b{padding:12px;}
+  .topbar{padding:9px 11px;padding-top:calc(9px + env(safe-area-inset-top));}
+  .topbar .sub{display:none;}            /* 480 以下标题下面那行说明挤没了价值 */
+  .brand{padding:16px 18px;}
+  .nav a{padding:11px 12px;}             /* 抽屉里的导航项加大到易点 */
+  .stat .num{font-size:18px;}
+
+  /* 筛选区、按钮组在窄屏一律换行，横向排会顶出屏幕 */
+  .card-h>div{flex-wrap:wrap;}
+
+  /* 多列表单在手机上排不下，一个字段一行 */
+  .fgrid-2,.fgrid-3,.fgrid-21{grid-template-columns:1fr;}
+
+}
+
+/* 手指操作时不要有 hover 的残留效果（触屏上 hover 会"粘住"） */
+@media (hover:none){
+  .nav a:hover{background:transparent;color:#3b4a5e;}
+  .nav a.active:hover{background:#e8f1fc;color:var(--primary);}
+  tr:hover td{background:transparent;}
+}
+
+/* 依据系统设置降低动效：抽屉也一样，别让敏感用户晕 */
+@media (prefers-reduced-motion:reduce){
+  .sidebar{transition:none;}
+  .side-foot .dot.idle{animation:none;opacity:.7;}
+}

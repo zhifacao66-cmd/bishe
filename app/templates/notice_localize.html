@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}生成社区落地件 · 极简减负平台{% endblock %}
+{% block page_title %}生成社区落地件{% endblock %}
+{% block page_sub %}依据 {{ notice.issuer }}《{{ notice.title }}》，整理成本社区发给居民的执行通知{% endblock %}
+
+{% block content %}
+<div class="card col-7">
+  <div class="card-h">
+    <h2>📝 落地件草稿</h2>
+    <span class="hint" id="srcTip">正在起草…</span>
+    <button class="btn btn-ghost" style="margin-left:auto" id="btnRedraft">重新起草</button>
+  </div>
+  <div class="card-b">
+    <div class="field">
+      <label>标题</label>
+      <input class="inp" id="lTitle" placeholder="关于落实《…》的通知">
+    </div>
+    <div class="field">
+      <label>正文 <span style="color:var(--muted);font-weight:400">支持 Markdown，「一、」为层级</span></label>
+      <textarea class="inp" id="lBody" rows="20" style="font-family:inherit;line-height:1.9"></textarea>
+    </div>
+    <div class="fgrid fgrid-2">
+      <div class="field">
+        <label>完成时限</label>
+        <input class="inp" id="lDeadline" type="date"
+               value="{{ notice.deadline.strftime('%Y-%m-%d') if notice.deadline else '' }}">
+      </div>
+      <div class="field">
+        <label>发布范围</label>
+        <select class="inp" id="lScope">
+          <option value="all">全体居民可见</option>
+          <option value="community">仅社区工作者可见</option>
+        </select>
+      </div>
+    </div>
+    <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#41556f;margin:4px 0 14px;cursor:pointer">
+      <input type="checkbox" id="lPublish" checked> 生成后立即发布到居民端
+    </label>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" id="btnCreate">生成并保存</button>
+      <a class="btn btn-ghost" style="text-decoration:none"
+         href="{% if back %}{{ url_for('views.notice_detail', nid=notice.id, back=back) }}{% else %}{{ url_for('views.notice_detail', nid=notice.id) }}{% endif %}">取消，回到原文</a>
+    </div>
+    <p style="font-size:11.5px;color:var(--muted);line-height:1.8;margin:12px 0 0">
+      草稿由系统起草，<b>发布前请逐句核对</b>：不得出现上级文件没有的要求，不得写具体的居民个人信息。
+      保存后这份落地件会与上级原文建立依据关系，两件可互相追溯。
+    </p>
+  </div>
+</div>
+
+<div class="card col-5">
+  <div class="card-h">
+    <h2>📄 上级原文</h2>
+    <span class="hint">{{ notice.doc_no or '无文号' }}</span>
+  </div>
+  <div class="card-b">
+    <div class="src-meta">
+      <div><span>发文单位</span><b>{{ notice.issuer or '—' }}</b></div>
+      <div><span>成文日期</span><b>{{ notice.issued_at.strftime('%Y-%m-%d') if notice.issued_at else '—' }}</b></div>
+      <div><span>来源文件</span><b>{{ notice.source_file or '—' }}</b></div>
+    </div>
+    <div class="src-body">{{ body|safe }}</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.src-meta{display:grid;grid-template-columns:1fr;gap:4px;font-size:12px;color:var(--muted);
+  padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--border)}
+.src-meta b{color:#16202e;font-weight:600;margin-left:8px}
+.src-body{font-size:13px;line-height:1.85;max-height:600px;overflow:auto;padding-right:4px}
+.src-body p{margin:0 0 8px;text-indent:2em}
+.src-body ul,.src-body ol{padding-left:20px;margin:0 0 8px}
+.src-body h3,.src-body h4{font-size:13px;margin:10px 0 5px}
+.notice-table{width:100%;border-collapse:collapse;font-size:12px;margin:0 0 8px}
+.notice-table th,.notice-table td{border:1px solid var(--border);padding:5px 7px;text-align:left}
+</style>
+<script>
+var PARENT = {{ notice.id }};
+var drafted = false;
+
+function fillDraft(force) {
+  var tip = document.getElementById('srcTip');
+  tip.textContent = '起草中…';
+  api('/api/notices/' + PARENT + '/draft').then(function (j) {
+    if (j.code !== 0) { tip.textContent = j.msg || '起草失败'; return; }
+    var d = j.data;
+    document.getElementById('lTitle').value = d.title;
+    document.getElementById('lBody').value = d.body_md;
+    if (d.deadline && !document.getElementById('lDeadline').value) {
+      document.getElementById('lDeadline').value = d.deadline;
+    }
+    tip.innerHTML = d.source === 'llm'
+      ? '<span style="color:#12885a">✓ 已由本地模型起草</span>'
+      : '<span style="color:#b8730b">已用规则模板起草（模型未启用，措辞建议再顺一遍）</span>';
+    drafted = true;
+  });
+}
+fillDraft();
+
+document.getElementById('btnRedraft').addEventListener('click', function () {
+  if (drafted && !confirm('重新起草会覆盖当前修改，确定？')) return;
+  fillDraft(true);
+});
+
+document.getElementById('btnCreate').addEventListener('click', function () {
+  var t = document.getElementById('lTitle').value.trim();
+  var b = document.getElementById('lBody').value.trim();
+  if (!t || !b) { alert('标题和正文都要填'); return; }
+  var btn = this;
+  btn.disabled = true; btn.textContent = '保存中…';
+  api('/api/notices/' + PARENT + '/localize', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      title: t, body_md: b,
+      deadline: document.getElementById('lDeadline').value,
+      scope: document.getElementById('lScope').value,
+      publish: document.getElementById('lPublish').checked
+    })
+  }).then(function (j) {
+    btn.disabled = false; btn.textContent = '生成并保存';
+    if (j.code !== 0) { alert(j.msg); return; }
+    // 跳到新生成的落地件，并把"列表那一屏"继续带下去——
+    // 否则从这里返回会回到"全部"，而用户是从"待签收"一路点进来的
+    var backUrl = {{ (back or '')|tojson }};
+    location.href = '/notices/' + j.data.id + (backUrl ? '?back=' + encodeURIComponent(backUrl) : '');
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+{% block title %}人员底册 · 极简减负平台{% endblock %}
+{% block page_title %}人员底册{% endblock %}
+{% block page_sub %}街道下发的重点人员台账 · 残疾人 / 防溺水 / 留守 · 已脱敏{% endblock %}
+
+{% block content %}
+<style>
+  /* 本页只用三样局部样式：说明条、精度徽章、标签片。
+     其余一律复用全局的 .card / .stat / .tw / table / .pgbar / .btn ——
+     这些组件在别的页面已经调好了，另起一套只会和全站不一致。 */
+  .pnote{background:#f4f8fd;border:1px solid #dbe7f5;border-radius:10px;
+    padding:12px 15px;font-size:12.5px;line-height:1.85;color:#4a5b70;}
+  .pnote b{color:#1a6bbd;}
+  .pnote .warn{color:#a8650f;}
+
+  .prec{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:5px;
+    margin-left:6px;white-space:nowrap;vertical-align:1px;}
+  .prec.p3{background:#e0f5ea;color:#1e8e5a;}
+  .prec.p2{background:#e3edfb;color:#206bc4;}
+  .prec.p1{background:#fdf0d7;color:#b37700;}
+  .prec.p0{background:#fbe4e4;color:#b03131;}
+
+  .tg{display:inline-block;font-size:11px;padding:1px 7px;border-radius:5px;
+    margin:0 4px 4px 0;white-space:nowrap;background:#eef3fb;color:#3d6fa8;}
+  .tg.w3{background:#fbe4e4;color:#b03131;font-weight:600;}
+  .tg.w2{background:#fdf0d7;color:#b37700;}
+
+  /* 筛选行：flex 而不是 grid-template-columns —— 行内栅格在窄屏压不动，
+     375px 会横向溢出（docs/26 红线 26）。 */
+  .pfilter{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;}
+  .pfilter input,.pfilter select{height:32px;border:1px solid var(--border,#dbe2ec);
+    border-radius:7px;padding:0 9px;font-size:13px;background:#fff;min-width:0;}
+  .pfilter input{flex:1 1 200px;}
+  .pfilter select{flex:0 1 138px;}
+  .pfilter .btn,.pfilter a.btn{height:32px;padding:0 13px;font-size:12.5px;
+    line-height:30px;text-decoration:none;display:inline-block;}
+
+  /* 点得动的 KPI：给它悬停反馈，否则"能点"这件事没人知道 */
+  .kclick{cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+  .kclick:hover{border-color:var(--primary,#206bc4);
+    box-shadow:0 2px 10px rgba(32,107,196,.10);}
+  .stat .num.na{color:#c3ccd8;font-size:20px;}
+  .stat .sub2{font-size:11px;color:#aab4c2;margin-top:1px;line-height:1.4;}
+
+  .mres{margin-top:11px;font-size:12.8px;line-height:1.8;color:#4a5b70;}
+  .mres .hit{color:#b03131;font-weight:600;}
+  .mres .flat{color:#a8650f;}
+  .mres .miss{color:#8a97a8;}
+  .mres.urgent{background:#fdf2f2;border-left:3px solid #d9534f;
+    padding:9px 12px;border-radius:0 7px 7px 0;}
+  .mres.lift{background:#fdf8f0;border-left:3px solid #d9a340;
+    padding:9px 12px;border-radius:0 7px 7px 0;}
+  .mres.flat{border-left:3px solid #c9d3e0;padding:9px 12px;border-radius:0 7px 7px 0;}
+</style>
+
+<div class="col-12">
+  <div class="pnote">
+    底册来自<b>以朵街道下发的三张台账</b>（残疾人 559 条、防溺水 2466 条——后者内部有 164 个身份证
+    重复登记、与残疾表还重叠 15 人；留守是空白模板），按身份证哈希去重后共 <b id="nTotal">—</b> 人。
+    姓名、身份证、电话<b>全部脱敏入库</b>，原始证件号不落库。
+    <span class="warn">地址精度如实标注：只有约 41% 能到门号，其余只到楼栋或社区 ——
+    这决定了底册能不能直接用来上门和匹配工单。</span>
+    带 <b>↗</b> 的指标可以点，点完筛选条件会落到下面的下拉里。
+  </div>
+</div>
+
+<div class="card stat col-4" id="cTotal">
+  <div class="ic" style="background:#e3edfb">👥</div>
+  <div><div class="num na" id="kTotal">—</div>
+    <div class="lbl">底册人数</div>
+    <div class="sub2" id="kScope">范围</div></div>
+</div>
+<div class="card stat col-4">
+  <div class="ic" style="background:#e6f6ee">♿</div>
+  <div><div class="num na" id="kDis">—</div>
+    <div class="lbl">残疾人</div>
+    <div class="sub2">持证台账</div></div>
+</div>
+<div class="card stat col-4">
+  <div class="ic" style="background:#e3edfb">🌊</div>
+  <div><div class="num na" id="kDrown">—</div>
+    <div class="lbl">防溺水对象</div>
+    <div class="sub2">未成年人全员覆盖</div></div>
+</div>
+<div class="card stat col-4 kclick" id="cHeavy" title="点这里看这批人">
+  <div class="ic" style="background:#fbe4e4">🔴</div>
+  <div><div class="num na" id="kHeavy">—</div>
+    <div class="lbl">重点看护 ↗</div>
+    <div class="sub2">权重 3 · 一级残疾 / 高风险</div></div>
+</div>
+<div class="card stat col-4 kclick" id="cMatchable" title="点这里只看能匹配到户的">
+  <div class="ic" style="background:#e6f6ee">🎯</div>
+  <div><div class="num na" id="kMatchable">—</div>
+    <div class="lbl">可匹配到户 ↗</div>
+    <div class="sub2">能认出"这户有重点人员"</div></div>
+</div>
+<div class="card stat col-4 kclick" id="cNoComm" title="点这里看台账没写清社区的">
+  <div class="ic" style="background:#f1f4f9">❔</div>
+  <div><div class="num na" id="kNoComm">—</div>
+    <div class="lbl">未明确社区 ↗</div>
+    <div class="sub2">台账没写清 · 仅街道可见</div></div>
+</div>
+
+<div class="card col-12">
+  <div class="card-h">
+    <h2>🔍 底册检索</h2>
+    <span class="hint" id="scopeHint">按社区 / 标签 / 定位精度筛选</span>
+  </div>
+  <div class="card-b">
+    <div class="pfilter">
+      <input id="fq" placeholder="搜姓名（已脱敏，只能按姓搜）、楼栋、组、地址…">
+      <select id="fcomm"><option value="">全部社区</option></select>
+      <select id="ftag">
+        <option value="">全部标签</option>
+        <option value="残疾">残疾</option>
+        <option value="防溺水">防溺水</option>
+        <option value="留守">留守</option>
+      </select>
+      <select id="fprec">
+        <option value="">全部定位精度</option>
+        <option value="3">栋 + 单元 + 门号</option>
+        <option value="2">栋 + 单元</option>
+        <option value="1">仅到楼栋 / 组</option>
+        <option value="0">无法定位</option>
+      </select>
+      <button class="btn btn-primary" id="btnSearch" type="button">查询</button>
+      <button class="btn btn-ghost" id="btnReset" type="button">重置</button>
+      {# 导出用 <a> 而不是 button+location：附件下载由浏览器自己处理，
+         点了一定有反应（按钮消失、下载栏出现），不会出现"点了没动静" #}
+      <a class="btn btn-ghost" href="/api/persons/export?kind=disabled">导出残疾人表</a>
+      <a class="btn btn-ghost" href="/api/persons/export?kind=drowning">导出防溺水表</a>
+      <a class="btn btn-ghost" href="/api/persons/export?kind=leftbehind">导出留守表</a>
+    </div>
+
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>姓名 / 证件号</th><th>性别 / 年龄</th><th>社区 · 组</th>
+          <th>现居住地址（定位精度）</th><th>标签</th><th>来源</th>
+        </tr></thead>
+        <tbody id="tbody">
+          <tr><td colspan="6" class="na" style="padding:26px;text-align:center;color:#a8b3c2">加载中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pgbar">
+      <span class="pg-sum" id="pageSum">—</span>
+      <button class="btn btn-ghost pg-btn" id="btnPrev" type="button">← 上一页</button>
+      <span class="pg-info" id="pageInfo">-</span>
+      <button class="btn btn-ghost pg-btn" id="btnNext" type="button">下一页 →</button>
+    </div>
+  </div>
+</div>
+
+<div class="card col-12">
+  <div class="card-h">
+    <h2>📍 地址反查</h2>
+    <span class="hint">贴一段报修内容，看这户在不在底册上 —— 派单提级用的就是这一步</span>
+  </div>
+  <div class="card-b">
+    <div class="pfilter" style="margin-bottom:0">
+      <input id="mText" placeholder="例：1栋1单元101室厨房漏水">
+      <button class="btn btn-primary" id="btnMatch" type="button">反查</button>
+    </div>
+    <div class="mres" id="mRes">
+      输入门号级地址（如「1栋1单元101」）才能匹配到户；只说"1栋"或"某社区"认不出是哪一家。
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var PAGE_SIZE = 20;
+  var NO_COMM = '__none__';           // 与 app/personbook.py:NO_COMMUNITY 一致
+  // weight 不放在下拉里（它不是"精度"也不是"标签"），但筛选条件必须有个落点，
+  // 否则点击 KPI 后再点查询就丢了 —— 状态和控件分离，两者都要能表达它。
+  var state = { page: 1, total: 0, filtered: false, weight: '' };
+
+  function $(id) { return document.getElementById(id); }
+  function txt(id, v) { var e = $(id); if (e) e.textContent = (v === 0 || v) ? v : '—'; }
+
+  function precBadge(lv, label) {
+    return '<span class="prec p' + (lv || 0) + '">' + esc(label || '无法定位') + '</span>';
+  }
+
+  function chips(tags) {
+    if (!tags || !tags.length) return '<span style="color:#c3ccd8">—</span>';
+    return tags.map(function (t) {
+      var w = t.weight || 0;
+      var cls = w >= 3 ? 'tg w3' : (w === 2 ? 'tg w2' : 'tg');
+      return '<span class="' + cls + '">' + esc(t.label) + '</span>';
+    }).join('');
+  }
+
+  function rowHtml(p) {
+    var who = [p.gender, p.age ? p.age + '岁' : ''].filter(Boolean).join(' / ') || '—';
+    var comm = esc(p.community || '（未明确社区）') + (p.grp ? ' · ' + esc(p.grp) : '');
+    return '<tr>' +
+      '<td><b>' + esc(p.name) + '</b>' +
+        '<div style="font-size:11px;color:#a8b3c2;margin-top:2px">' + esc(p.id_masked) + '</div></td>' +
+      '<td>' + esc(who) + '</td>' +
+      '<td>' + comm + '</td>' +
+      '<td>' + esc(p.address || '（空）') + precBadge(p.addr_level, p.addr_precision) + '</td>' +
+      '<td>' + chips(p.tags) + '</td>' +
+      '<td style="color:#8a97a8;white-space:nowrap">' + esc(p.source) + '</td>' +
+      '</tr>';
+  }
+
+  // ---------------- 概览 ----------------
+  // 返回 Promise：社区下拉的 option 是这里异步建的，恢复网址里的筛选
+  // 必须等它建完再赋值，否则 select.value 赋给不存在的 option 会静默变空。
+  function loadStats() {
+    return api('/api/persons/stats').then(function (d) {
+      var s = d.data || {};
+      var bt = s.by_tag || {};
+      txt('kTotal', s.total);
+      txt('kDis', bt['残疾'] || 0);
+      txt('kDrown', bt['防溺水'] || 0);
+      txt('kHeavy', s.heavy || 0);
+      txt('kMatchable', s.matchable || 0);
+      txt('kNoComm', s.no_community || 0);
+      txt('nTotal', s.total);
+      txt('kScope', s.scope || '');
+      ['kTotal', 'kDis', 'kDrown', 'kHeavy', 'kMatchable', 'kNoComm'].forEach(function (id) {
+        var e = $(id); if (e) e.className = 'num';
+      });
+      var pr = s.precision || {};
+      txt('scopeHint', '定位到门号 ' + (pr['栋+单元+门号'] || 0) + ' 条 · 仅到组 ' +
+          (pr['仅到楼栋/组'] || 0) + ' 条 · 无法定位 ' + (pr['无法定位'] || 0) + ' 条');
+
+      // 社区下拉按真实数据生成。写死三个社区名的话，街道下次多下发一个社区，
+      // 那批人列表里查得到、下拉里选不到，没人会发现是这里的问题。
+      var sel = $('fcomm');
+      (s.by_community || []).forEach(function (c) {
+        var o = document.createElement('option');
+        o.value = c.value; o.textContent = c.name + '（' + c.count + '）';
+        sel.appendChild(o);
+      });
+    }).catch(function (e) {
+      txt('scopeHint', '统计加载失败：' + (e.message || ''));
+    });
+  }
+  // ---------------- 列表 ----------------
+  function currentFilter() {
+    return {
+      q: $('fq').value.trim(),
+      community: $('fcomm').value,
+      tag: $('ftag').value,
+      precision: $('fprec').value,
+      weight: state.weight
+    };
+  }
+
+  function loadList() {
+    var f = currentFilter();
+    var q = new URLSearchParams();
+    q.set('page', state.page);
+    q.set('size', PAGE_SIZE);
+    ['q', 'community', 'tag', 'precision', 'weight'].forEach(function (k) {
+      if (f[k]) q.set(k, f[k]);
+    });
+
+    api('/api/persons?' + q.toString()).then(function (d) {
+      var data = d.data || {};
+      var items = data.items || [];
+      state.total = data.total || 0;
+      state.filtered = !!(f.q || f.community || f.tag || f.precision || f.weight);
+
+      var tb = $('tbody');
+      if (!items.length) {
+        tb.innerHTML = '<tr><td colspan="6" style="padding:26px;text-align:center;color:#a8b3c2">' +
+          (state.filtered ? '没有符合条件的记录 —— 条件可能太严，试试「重置」'
+                          : '底册里还没有数据，先跑 scripts/import_ledger.py --apply') +
+          '</td></tr>';
+      } else {
+        tb.innerHTML = items.map(rowHtml).join('');
+      }
+
+      var pages = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
+      if (state.page > pages) { state.page = pages; }   // 筛完变少了别停在空页
+      $('pageSum').textContent = '共 ' + state.total + ' 人' +
+        (state.filtered ? '（已按条件筛选）' : '') + ' · 当前第 ' + state.page + ' 页';
+      $('pageInfo').textContent = state.page + ' / ' + pages;
+      $('btnPrev').disabled = state.page <= 1;
+      $('btnNext').disabled = state.page >= pages;
+      syncUrl();                       // 页码与筛选进网址：刷新、分享都还在原处
+    }).catch(function (e) {
+      $('tbody').innerHTML = '<tr><td colspan="6" style="padding:26px;text-align:center;color:#b03131">' +
+        '加载失败：' + esc(e.message || '') + '</td></tr>';
+      txt('pageSum', '加载失败');
+    });
+  }
+
+  function go(p) { state.page = p; loadList(); }
+
+  // 网址 ↔ 界面：用 replaceState 而不是 pushState —— 翻页不该在浏览器历史里
+  // 堆几十条记录，"返回"应该回到上一个页面，不是回到上一页。
+  function syncUrl() {
+    var f = currentFilter();
+    var u = new URLSearchParams();
+    ['q', 'community', 'tag', 'precision', 'weight'].forEach(function (k) {
+      if (f[k]) u.set(k, f[k]);
+    });
+    if (state.page > 1) u.set('page', state.page);
+    var qs = u.toString();
+    history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+  }
+
+  // ---------------- 交互 ----------------
+  $('btnSearch').addEventListener('click', function () { go(1); });
+  $('btnReset').addEventListener('click', function () {
+    $('fq').value = '';
+    $('fcomm').value = '';
+    $('ftag').value = '';
+    $('fprec').value = '';
+    state.weight = '';
+    go(1);
+  });
+  $('btnPrev').addEventListener('click', function () { if (state.page > 1) go(state.page - 1); });
+  $('btnNext').addEventListener('click', function () { go(state.page + 1); });
+  $('fq').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); go(1); }
+  });
+  // 下拉改了立即生效——「查询」按钮主要给手输关键词和回车一个落点
+  ['fcomm', 'ftag', 'fprec'].forEach(function (id) {
+    $(id).addEventListener('change', function () { go(1); });
+  });
+
+  // KPI 卡片：点一下等于设置对应筛选条件，并且把条件**显示出来**
+  // （下拉要跟着变，否则数字变了却看不出筛了什么）
+  $('cHeavy').addEventListener('click', function () {
+    $('fq').value = '';
+    $('fcomm').value = '';
+    $('ftag').value = '';
+    $('fprec').value = '';
+    state.weight = '3';                 // 权重筛选取「≥3」，与 riskreview 的紧急档一致
+    go(1);
+  });
+  $('cMatchable').addEventListener('click', function () {
+    state.weight = '';
+    $('fcomm').value = '';
+    $('ftag').value = '';
+    $('fprec').value = '3';
+    go(1);
+  });
+  $('cNoComm').addEventListener('click', function () {
+    var has = Array.prototype.some.call($('fcomm').options, function (o) {
+      return o.value === NO_COMM;
+    });
+    if (!has) {                          // 社区角色的下拉里根本没有这一项
+      $('mRes').className = 'mres miss';
+      $('mRes').textContent = '「未明确社区」的人只有街道能看到 —— ' +
+        '社区账号的底册里本来就没有他们（让社工拿一份不知道是不是自己辖区的名单去上门是错的）。';
+      return;
+    }
+    state.weight = '';
+    $('fq').value = '';
+    $('ftag').value = '';
+    $('fprec').value = '';
+    $('fcomm').value = NO_COMM;
+    go(1);
+  });
+
+  // ---------------- 地址反查 ----------------
+  $('btnMatch').addEventListener('click', function () {
+    var t = $('mText').value.trim();
+    var box = $('mRes');
+    if (!t) {
+      box.className = 'mres miss';
+      box.textContent = '先贴一段地址，例：1栋1单元101 厨房漏水';
+      return;
+    }
+    box.className = 'mres';
+    box.textContent = '反查中…';
+
+    api('/api/persons/match?text=' + encodeURIComponent(t)).then(function (d) {
+      var data = d.data || {};
+      var hits = data.hits || [];
+      // 提级与否由后端判定（personbook.lift_note）。前端只显示，
+      // 不再自己写 weight>=2 —— 命中全是权重 1 时页面说"应提级"而系统
+      // 根本不提级，那种"说的和做的相反"比不显示更糟。
+      var v = data.verdict || {};
+      box.className = 'mres ' + (v.level || 'miss');
+      if (!hits.length) {
+        box.textContent = v.text || '这户不在底册上 —— 按常规时限处理。';
+        return;
+      }
+      var names = hits.map(function (h) {
+        var tags = (h.tags || []).map(function (x) { return esc(x.label); }).join('、');
+        return esc(h.name) + '（' + (tags || '无标签') + '）';
+      }).join('；');
+      box.innerHTML = '<span class="hit">命中 ' + hits.length + ' 人：</span>' + names +
+        '<div style="margin-top:6px">→ ' + esc(v.text || '') + '</div>';
+    }).catch(function (e) {
+      box.className = 'mres miss';
+      box.textContent = '反查失败：' + (e.message || '');
+    });
+  });
+  $('mText').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); $('btnMatch').click(); }
+  });
+
+  // ---------------- 启动：先恢复网址里的筛选，再拉数据 ----------------
+  var U = new URLSearchParams(location.search);
+  state.page = Math.max(1, parseInt(U.get('page') || '1', 10) || 1);
+  state.weight = U.get('weight') || '';
+  $('fq').value = U.get('q') || '';
+  $('ftag').value = U.get('tag') || '';
+  $('fprec').value = U.get('precision') || '';
+
+  loadStats().then(function () {
+    var comm = U.get('community');
+    if (comm) { $('fcomm').value = comm; }   // 选项刚由 loadStats 建好，此刻赋值才留得住
+    loadList();
+  });
+})();
+</script>
+{% endblock %}

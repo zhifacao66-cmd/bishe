@@ -1,0 +1,29 @@
+{% extends "portal/base.html" %}
+{% block title %}通知公告 · 幸福里居民服务{% endblock %}
+{% block sub %}街道与社区发布的通知{% endblock %}
+{% block body %}
+
+<div class="p-card">
+  <h2><span class="bar"></span>通知公告</h2>
+  {% if notices %}
+  <div class="p-list">
+    {% for n in notices %}
+    <a class="p-item" href="{{ url_for('portalviews.notice', nid=n.id) }}">
+      <div class="top">
+        <span class="ttl">{{ n.title }}</span>
+        {% if n.pinned %}<span class="tag tag-pin">置顶</span>{% endif %}
+      </div>
+      <div class="meta">
+        {{ n.issuer }}{% if n.doc_no %} · {{ n.doc_no }}{% endif %}
+        · {{ (n.issued_at or n.published_at).strftime('%Y-%m-%d') if (n.issued_at or n.published_at) else '' }}
+      </div>
+      {% if n.summary %}<div class="sum">{{ n.summary }}</div>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="p-muted">暂时没有公告。</p>
+  {% endif %}
+</div>
+
+{% endblock %}

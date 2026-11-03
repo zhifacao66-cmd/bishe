@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}任务看板 · 极简减负平台{% endblock %}
+{% block page_title %}任务看板{% endblock %}
+{% block page_sub %}{% if can('task.manage') %}街道下发 · 社区/物业承接 · 超时自动督办{% else %}街道下派给我的任务 · 完成后确认，全程留痕{% endif %}{% endblock %}
+
+{% block content %}
+<div class="card stat col-4">
+  <div class="ic" style="background:#e3edfb">📋</div>
+  <div><div class="num" id="cOpen">-</div><div class="lbl">待办任务</div></div>
+</div>
+<div class="card stat col-4">
+  <div class="ic" style="background:#fbe4e4">⏰</div>
+  <div><div class="num" id="cOver" style="color:var(--red)">-</div><div class="lbl">已超时</div></div>
+</div>
+<div class="card stat col-4">
+  <div class="ic" style="background:#e0f5ea">✅</div>
+  <div><div class="num" id="cDone">-</div><div class="lbl">已完成</div></div>
+</div>
+
+<div class="col-12" id="alertBar" style="display:none">
+  <div style="background:#fdf1f1;border:1px solid #f3c1c1;border-radius:10px;padding:12px 16px;font-size:13px;color:#b03131;">
+    <b>🚨 督办Agent 告警：</b><span id="alertText"></span>
+  </div>
+</div>
+
+{% if can('task.manage') %}
+<div class="card col-5">
+  <div class="card-h"><h2>📤 下发任务</h2><span class="hint">街道 → 社区 / 物业</span></div>
+  <div class="card-b">
+    <div class="field">
+      <label>任务标题</label>
+      <input class="inp" id="fTitle" maxlength="100" placeholder="例如：10 月人口变动台账补录">
+    </div>
+    <div class="tk-row">
+      <div class="field">
+        <label>受派对象</label>
+        <select class="inp" id="fRole" onchange="syncOrg()">
+          <option value="community">社区工作者</option>
+          <option value="property">物业</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>受派组织</label>
+        <input class="inp" id="fOrg" placeholder="幸福里社区">
+      </div>
+    </div>
+    <div class="field">
+      <label>截止时间（督办Agent 按此判超时）</label>
+      <input class="inp" id="fDdl" type="datetime-local">
+    </div>
+    <div class="field">
+      <label>任务说明（可选，交代口径与要求）</label>
+      <textarea class="fde-input" id="fDetail" rows="3" style="min-height:0"
+        placeholder="按综治口径补齐 9 月以来新入住、迁出人员"></textarea>
+    </div>
+    <button class="btn btn-primary" id="btnCreate" style="width:100%;justify-content:center"
+            onclick="createTask()">📤 下发并纳入督办</button>
+    <div class="quick">下发后社区/物业登录即可在任务看板看到，超时自动进入督办告警。</div>
+  </div>
+</div>
+
+<div class="card col-7">
+{% else %}
+<div class="card col-12">
+{% endif %}
+  <div class="card-h">
+    <h2>📋 任务列表</h2>
+    <span class="hint" id="scopeHint">按截止时间排序 · 超时任务标红</span>
+  </div>
+  <div class="tw">
+    <table>
+      <thead><tr>
+        <th>任务</th><th>受派对象</th><th>截止时间</th><th>状态</th><th style="width:110px">操作</th>
+      </tr></thead>
+      <tbody id="tbody"><tr><td colspan="5" style="text-align:center;color:var(--muted)">加载中…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CAN_MANAGE = {{ 'true' if can('task.manage') else 'false' }};
+
+// 转义统一用 base.html 的全局 esc()
+
+function syncOrg(){
+  const r = document.getElementById('fRole').value;
+  document.getElementById('fOrg').placeholder = r === 'property' ? '幸福里物业' : '幸福里社区';
+}
+
+async function load(){
+  const j = await api('/api/tasks');
+  if(j.code !== 0){ document.getElementById('tbody').innerHTML =
+    `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${esc(j.msg)}</td></tr>`; return; }
+  const d = j.data, list = d.rows || [];
+  document.getElementById('cOpen').textContent = d.summary.open;
+  document.getElementById('cOver').textContent = d.summary.overdue;
+  document.getElementById('cDone').textContent = d.summary.done;
+
+  const tb = document.getElementById('tbody');
+  if(!list.length){
+    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">暂无任务</td></tr>';
+  } else {
+    tb.innerHTML = list.map(t=>{
+      const done = t.status === 'done';
+      let badge = '<span class="badge b-blue">待办</span>';
+      if(done) badge = '<span class="badge b-green">已完成</span>';
+      else if(t.overdue) badge = `<span class="badge b-red">超时 ${t.overdue_hours}h</span>`;
+      else if(t.left_hours !== null && t.left_hours < 24) badge = `<span class="badge b-orange">剩 ${t.left_hours}h</span>`;
+
+      let op = '<span style="color:var(--muted);font-size:12px">已办结</span>';
+      if(!done){
+        op = `<button class="btn btn-ghost" style="padding:5px 12px;font-size:12px"
+               onclick="finishTask(${t.id})">${CAN_MANAGE ? '关闭' : '确认完成'}</button>`;
+      }
+      const who = `${esc(t.assignee_role_name)}<div class="tk-detail">${esc(t.assignee_org)||'-'}</div>`;
+      return `<tr ${t.overdue ? 'style="background:#fdf6f6"' : ''}>
+        <td><div class="tk-title">${esc(t.title)}</div>
+            <div class="tk-detail">${esc(t.detail)||'—'}</div></td>
+        <td>${who}</td>
+        <td style="font-size:12px;color:${t.overdue ? 'var(--red)' : 'var(--muted)'}">${t.deadline||'-'}
+            <div class="tk-detail">下发人 ${esc(t.creator)||'-'}</div></td>
+        <td>${badge}</td>
+        <td>${op}</td></tr>`;
+    }).join('');
+  }
+
+  const bar = document.getElementById('alertBar');
+  const od = list.filter(t=>t.overdue);
+  if(od.length){
+    bar.style.display = '';
+    document.getElementById('alertText').textContent =
+      `${od.length} 个任务超时未办结（${od.map(t=>'「'+t.title+'」').join('、')}），请尽快处理`;
+  } else bar.style.display = 'none';
+}
+
+async function createTask(){
+  const title = document.getElementById('fTitle').value.trim();
+  if(!title){ alert('请填写任务标题'); return; }
+  const ddlRaw = document.getElementById('fDdl').value;
+  if(!ddlRaw){ alert('请选择截止时间'); return; }
+  const btn = document.getElementById('btnCreate');
+  btn.disabled = true; btn.textContent = '下发中…';
+  try{
+    const j = await api('/api/tasks', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        title: title,
+        assignee_role: document.getElementById('fRole').value,
+        assignee_org: document.getElementById('fOrg').value.trim(),
+        deadline: ddlRaw.replace('T',' '),
+        detail: document.getElementById('fDetail').value.trim(),
+      })});
+    if(j.code !== 0){ alert(j.msg); return; }
+    document.getElementById('fTitle').value = '';
+    document.getElementById('fDetail').value = '';
+    load();
+  } finally { btn.disabled = false; btn.textContent = '📤 下发并纳入督办'; }
+}
+
+async function finishTask(id){
+  if(!confirm(CAN_MANAGE ? '确认关闭该任务？' : '确认该任务已完成？')) return;
+  const j = await api(`/api/tasks/${id}/done`, {method:'POST'});
+  if(j.code !== 0) alert(j.msg);
+  load();
+}
+
+/* 默认截止时间：3 天后 18:00 */
+(function(){
+  const el = document.getElementById('fDdl');
+  if(!el) return;
+  const d = new Date(Date.now() + 3*864e5);
+  const p = n => String(n).padStart(2,'0');
+  el.value = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T18:00`;
+  syncOrg();
+})();
+
+load();
+</script>
+{% endblock %}

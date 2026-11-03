@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+{% block title %}通知公告 · 极简减负平台{% endblock %}
+{% block page_title %}通知公告{% endblock %}
+{% block page_sub %}
+{% if can('notice.import') %}在线发文或把文件放进 data/notices/ → 自动解析编排 → 投递给社区
+{% elif can('notice.receive') %}上级来文先签收，再生成社区落地件发给居民
+{% elif can('notice.manage') %}确认发布 / 下架；居民端同步可见
+{% else %}只读；公告由社区发布，居民端同步展示{% endif %}
+{% endblock %}
+
+{% block content %}
+{# 四个统计卡都做成链接：看到"待签收 1"却不知道点哪儿能筛出来，是很典型的断点 #}
+<a class="card stat stat-link col-3" href="{{ url_for('views.notices', status='published') }}">
+  <div class="ic" style="background:#e0f5ea">📢</div>
+  <div><div class="num" id="cPub">-</div><div class="lbl">已发布</div></div>
+</a>
+<a class="card stat stat-link col-3" href="{{ url_for('views.notices', status='pending') }}">
+  <div class="ic" style="background:#fdf1e3">⏳</div>
+  <div><div class="num" id="cPen" style="color:var(--orange,#c47d0a)">-</div><div class="lbl">待确认</div></div>
+</a>
+<a class="card stat stat-link col-3" href="{{ url_for('views.notices', recv='dispatched') }}">
+  <div class="ic" style="background:#e8eefb">📥</div>
+  <div><div class="num" id="cTodo" style="color:#206bc4">-</div><div class="lbl">待签收</div></div>
+</a>
+<a class="card stat stat-link col-3" href="{{ url_for('views.notices', status='offline') }}">
+  <div class="ic" style="background:#eef1f6">🗂️</div>
+  <div><div class="num" id="cOff">-</div><div class="lbl">已下架</div></div>
+</a>
+
+{% if can('notice.receive') %}
+<div class="card col-12" id="todoCard" style="display:none">
+  <div class="card-h">
+    <h2>📥 收文待办</h2>
+    <span class="hint">上级投递的文件，签收后即可生成社区落地件</span>
+  </div>
+  <div class="card-b" id="todoList" style="padding-top:6px"></div>
+</div>
+{% endif %}
+
+{% if can('notice.import') %}
+<div class="card col-12">
+  <div class="card-h">
+    <h2>✉️ 在线发文</h2>
+    <span class="hint">点对点投递给社区，对方工作台会出现待办；投递人、时限全程留痕</span>
+    <button class="btn btn-ghost" style="margin-left:auto" id="btnToggleD">展开填写</button>
+  </div>
+  <div class="card-b" id="dispatchForm" style="display:none">
+    <div class="fgrid fgrid-21">
+      <div class="field"><label>文件标题 <span style="color:#c0392b">*</span></label>
+        <input class="inp" id="dTitle" placeholder="关于开展高层住宅消防安全专项排查的通知"></div>
+      <div class="field"><label>发文单位 <span style="color:#c0392b">*</span></label>
+        <input class="inp" id="dIssuer" value="{{ current_user.org }}"></div>
+      <div class="field"><label>发文字号</label>
+        <input class="inp" id="dDocNo" placeholder="幸街发〔2026〕18号"></div>
+      <div class="field"><label>收文单位</label>
+        <input class="inp" id="dRecv" placeholder="留空 = 全体社区"></div>
+      <div class="field"><label>成文日期</label>
+        <input class="inp" id="dIssued" type="date"></div>
+      <div class="field"><label>要求完成时限</label>
+        <input class="inp" id="dDeadline" type="date"></div>
+    </div>
+    <div class="field"><label>正文 <span style="color:#c0392b">*</span>
+      <span style="color:var(--muted);font-weight:400">支持 Markdown，「一、」「1.」「- 」会被识别为层级</span></label>
+      <textarea class="inp" id="dBody" rows="10" style="font-family:inherit;line-height:1.8"
+        placeholder="各社区、各有关单位：&#10;&#10;现将有关事项通知如下：&#10;&#10;一、工作范围&#10;……"></textarea>
+    </div>
+    <button class="btn btn-primary" id="btnDispatch">投递给社区</button>
+  </div>
+</div>
+{% endif %}
+
+{% if can('notice.import') %}
+<div class="card col-12">
+  <div class="card-h">
+    <h2>📂 上级文件导入</h2>
+    <span class="hint">支持 .md（带元信息头）/ .docx / .txt，同一文件重复导入会自动去重</span>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px">
+        <input type="checkbox" id="autoPub" checked> 字段完整时自动发布
+      </label>
+      <button class="btn btn-primary" id="btnScan">扫描目录并导入</button>
+    </div>
+  </div>
+  <div class="card-b" id="scanOut" style="display:none;font-size:13px;line-height:1.9"></div>
+</div>
+{% endif %}
+
+<div class="card col-12">
+  <div class="card-h">
+    <h2>📋 公告列表</h2>
+    <span class="hint">点标题查看详情；筛选条件会记进网址，从详情返回时还在</span>
+    {# 首屏就把高亮算对：等服务端渲染完再由 JS 补 class，会有一瞬间"全都不是选中"的闪烁 #}
+    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn {{ 'btn-primary' if not cur_status and not cur_recv else 'btn-ghost' }}"
+              data-filter="">全部</button>
+      <button class="btn {{ 'btn-primary' if cur_status == 'published' else 'btn-ghost' }}"
+              data-filter="status:published">已发布</button>
+      <button class="btn {{ 'btn-primary' if cur_status == 'pending' else 'btn-ghost' }}"
+              data-filter="status:pending">待确认</button>
+      <button class="btn {{ 'btn-primary' if cur_status == 'offline' else 'btn-ghost' }}"
+              data-filter="status:offline">已下架</button>
+      <button class="btn {{ 'btn-primary' if cur_recv == 'dispatched' else 'btn-ghost' }}"
+              data-filter="recv:dispatched">待签收</button>
+      <button class="btn {{ 'btn-primary' if cur_pin in ('1', 'true') else 'btn-ghost' }}"
+              data-filter="pin:1">📌 已置顶 <span id="cPin">0</span></button>
+    </div>
+  </div>
+  <div class="card-b" style="padding-top:8px">
+    <div class="tw">
+      <table>
+        <thead>
+          <tr style="text-align:left;color:var(--muted);font-size:12px">
+            <th style="padding:8px 6px">标题</th>
+            <th style="padding:8px 6px;width:96px">来源</th>
+            <th style="padding:8px 6px;width:130px">发文单位</th>
+            <th style="padding:8px 6px;width:140px">文号</th>
+            <th style="padding:8px 6px;width:80px">状态</th>
+            <th style="padding:8px 6px;width:170px">操作</th>
+          </tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="6" style="padding:18px;color:var(--muted)">加载中…</td></tr></tbody>
+      </table>
+    </div>
+    {# 分页条：列表超过一屏就得能翻，且"共几条"要跟列表同源——
+       原来写死 limit(200)，第 201 条起静默消失而卡片仍是全量数字 #}
+    <div class="pgbar">
+      <span class="pg-sum" id="listHint"></span>
+      <button class="btn btn-ghost pg-btn" id="pgPrev" type="button">← 上一页</button>
+      <span class="pg-info" id="pgInfo">-</span>
+      <button class="btn btn-ghost pg-btn" id="pgNext" type="button">下一页 →</button>
+    </div>
+  </div>
+</div>
+
+<div class="card col-12">
+  <div class="card-h"><h2>ℹ️ 自动编排规则</h2></div>
+  <div class="card-b" style="font-size:13px;line-height:1.9;color:var(--muted)">
+    <p style="margin:0 0 8px">文件放进 <code>data/notices/</code> 后，系统按公文排布依次识别：<b>标题 → 发文机关 → 发文字号 → 正文 → 落款 → 成文日期</b>，并自动完成版面编排。</p>
+    <p style="margin:0 0 8px"><b>标题和发文单位缺一不可</b>。任一缺失则转入「待确认」，不会自动发布——政务信息发出去是要担责的，宁可多点一下，也不能把"关于××的通知"错认成发文单位。</p>
+    <p style="margin:0"><b>Markdown 带元信息头</b>最稳，可精确指定每个字段：</p>
+    <pre style="background:#f7f9fc;border-radius:8px;padding:12px;font-size:12px;overflow:auto;margin:8px 0 0">---
+title: 关于开展高层住宅消防安全专项排查的通知
+issuer: 幸福里街道办事处
+doc_no: 幸街发〔2026〕18号
+issued_at: 2026-10-15
+category: 通知公告
+pinned: true
+---
+正文…</pre>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+/* 统计卡可点击：hover 时描边变蓝，给"这里能点"的反馈，否则它看起来和普通卡片一样 */
+a.stat-link{text-decoration:none;color:inherit;cursor:pointer}
+a.stat-link:hover{border-color:var(--primary,#206bc4)}
+a.stat-link:hover .lbl{color:var(--primary,#206bc4)}
+</style>
+<script>
+// 筛选状态只从网址读，不放在内存里。
+// 这样刷新生效、从详情返回生效、把链接发给同事也生效——
+// 而放在 JS 变量里，一离开页面就没了，回来又变成"全部"，用户得重新找刚才那条。
+var filter = (function () {
+  var q = new URLSearchParams(location.search);
+  if (q.get('status')) return 'status:' + q.get('status');
+  if (q.get('recv')) return 'recv:' + q.get('recv');
+  if (q.get('pin')) return 'pin:' + q.get('pin');
+  return '';
+})();
+
+// 页码同样进网址：翻到第 3 页点进详情，返回时还在第 3 页
+var PAGE = Math.max(1, parseInt(new URLSearchParams(location.search).get('page') || '1', 10) || 1);
+var PAGE_SIZE = 20;
+
+// 详情链接带上"我是从哪一屏点进来的"，详情页的返回键据此原样回去
+function detailHref(id) {
+  return '/notices/' + id + '?back=' + encodeURIComponent(location.pathname + location.search);
+}
+
+function tag(st) {
+  return {published:'<span style="color:#12885a">已发布</span>',
+          pending:'<span style="color:#b8730b">待确认</span>',
+          offline:'<span style="color:#8794a8">已下架</span>'}[st] || st;
+}
+function kindTag(k, recv, lc, lp) {
+  var s = {superior:'<span style="color:#206bc4">上级来文</span>',
+           local:'<span style="color:#7a4fbf">本级落地</span>',
+           original:'<span style="color:#5b7392">本级原创</span>'}[k] || k;
+  if (recv === 'dispatched') s += '<div style="font-size:11px;color:#b8730b;margin-top:2px">待签收</div>';
+  else if (recv === 'received') s += '<div style="font-size:11px;color:#12885a;margin-top:2px">已签收</div>';
+  // 办文进度：上级看"下面办没办"，社区看"自己办到哪"——同一列，两种人都读得懂
+  if (k === 'superior' && recv === 'received') {
+    if (lc > 0) {
+      s += '<div style="font-size:11px;margin-top:1px;color:' + (lp > 0 ? '#12885a' : '#b8730b') + '">'
+         + (lp > 0 ? '已办文·已发布' : '已办文·未发布') + '</div>';
+    } else {
+      s += '<div style="font-size:11px;margin-top:1px;color:#c0392b">未办文</div>';
+    }
+  }
+  return s;
+}
+function load() {
+  // 分页参数跟着筛选一起走：换筛选必须回第 1 页，否则"待签收"第 3 页
+  // 切到"已发布"会停在一个空页上（总条数不够三页）
+  var qs = new URLSearchParams({ size: String(PAGE_SIZE), page: String(PAGE) });
+  if (filter) {
+    var i = filter.indexOf(':');
+    qs.set(filter.slice(0, i), filter.slice(i + 1));
+  }
+  api('/api/notices?' + qs).then(function (j) {
+    var rows = document.getElementById('rows');
+    if (j.code !== 0) {
+      // 业务拒绝也要落在表格里说清楚。原来这里 `if (j.code !== 0) return;`
+      // 直接退出，表格永远停在"加载中…"——失败和没加载完长得一模一样
+      rows.innerHTML = '<tr><td colspan="6" style="padding:18px;color:#c0392b">'
+        + esc(j.msg || '加载失败') + '</td></tr>';
+      return;
+    }
+    var d = j.data, c = d.counts;
+    document.getElementById('cPub').textContent = c.published;
+    document.getElementById('cPen').textContent = c.pending;
+    document.getElementById('cOff').textContent = c.offline;
+    document.getElementById('cTodo').textContent = c.todo;
+    // 置顶额度直接标在筛选按钮上：满额时一眼能看出来，
+    // 不用等点了被拒才知道该先撤一条
+    document.getElementById('cPin').textContent = c.pinned + '/' + d.max_pinned;
+
+    // 页码以服务端为准：请求的页超过总页数时后端会夹到最后一页，
+    // 前端若继续用自己那份 PAGE，页脚会写"99 / 3"
+    PAGE = c.page || 1;
+    syncUrl();
+    document.getElementById('pgInfo').textContent = PAGE + ' / ' + (c.pages || 1);
+    document.getElementById('pgPrev').disabled = PAGE <= 1;
+    document.getElementById('pgNext').disabled = PAGE >= (c.pages || 1);
+    document.getElementById('listHint').textContent =
+      (filter ? '筛选出 ' : '共 ') + c.matched + ' 条'
+      + (c.pages > 1 ? '（第 ' + PAGE + ' 页，本页 ' + c.shown + ' 条）' : '');
+
+    var html = '';
+    d.items.forEach(function (n) {
+      var ops = ['<a class="btn btn-ghost" style="text-decoration:none;padding:5px 10px" href="' + detailHref(n.id) + '">查看</a>'];
+      {% if can('notice.manage') %}
+      if (n.status === 'pending') ops.push('<button class="btn btn-primary" style="padding:5px 10px" onclick="act(' + n.id + ',\'publish\')">发布</button>');
+      if (n.status === 'published') ops.push('<button class="btn btn-ghost" style="padding:5px 10px" onclick="act(' + n.id + ',\'offline\')">下架</button>');
+      // 置顶是同一权限点（通知公告的口径由属地社区背书），放在发布/下架之后，
+      // 顺序也表达优先级：先决定发不发，再决定谁排前面
+      ops.push('<button class="btn btn-ghost" style="padding:5px 10px" onclick="act(' + n.id + ',\'pin\')" title="'
+        + (n.pinned ? '取消置顶后回到按时间排序' : '置顶后排在列表最前，居民端同样排前') + '">'
+        + (n.pinned ? '取消置顶' : '📌 置顶') + '</button>');
+      {% endif %}
+      html += '<tr style="border-top:1px solid var(--border)' + (n.pinned ? ';background:#fffdf4' : '') + '">'
+        + '<td style="padding:9px 6px"><a href="' + detailHref(n.id) + '" style="color:inherit;text-decoration:none"><b>' + esc(n.title) + '</b></a>'
+        + (n.pinned ? ' <span style="font-size:11px;color:#c0392b" title="置顶于 ' + esc(n.pinned_at || '') + '">📌 置顶</span>' : '')
+        + (n.parse_note ? '<div style="font-size:11px;color:#b8730b;margin-top:3px">' + esc(n.parse_note) + '</div>' : '')
+        + '</td>'
+        + '<td style="padding:9px 6px;font-size:12px;line-height:1.5">' + kindTag(n.kind, n.recv_status, n.local_count, n.local_published) + '</td>'
+        + '<td style="padding:9px 6px;font-size:12px">' + (esc(n.issuer) || '<span style="color:#c0392b">未识别</span>') + '</td>'
+        + '<td style="padding:9px 6px;font-size:12px">' + (esc(n.doc_no) || '—') + '</td>'
+        + '<td style="padding:9px 6px;font-size:12px">' + tag(n.status) + '</td>'
+        + '<td style="padding:9px 6px;display:flex;gap:5px;flex-wrap:wrap">' + ops.join('') + '</td>'
+        + '</tr>';
+    });
+    rows.innerHTML = html || '<tr><td colspan="6" style="padding:18px;color:var(--muted)">'
+      + (filter ? '没有符合条件的公告，换个筛选试试' : '还没有公告，去上方「扫描目录并导入」或在线发文') + '</td></tr>';
+    restoreScroll();
+  });
+  loadTodo();
+}
+
+/* 页码写回网址：翻页不该产生新的历史记录（否则按一次后退只回到上一页，
+   要按很多次才退得出去），所以一律 replaceState */
+function syncUrl() {
+  var u = new URL(location.href);
+  if (PAGE > 1) u.searchParams.set('page', String(PAGE)); else u.searchParams.delete('page');
+  history.replaceState(null, '', u);
+}
+
+function goPage(p) {
+  PAGE = Math.max(1, p);
+  syncUrl();
+  load();
+  // 翻页后回到列表顶部：停在原来的滚动位置会让人以为"没翻动"
+  var card = document.getElementById('rows');
+  if (card && card.scrollIntoView) card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+document.getElementById('pgPrev').addEventListener('click', function () { goPage(PAGE - 1); });
+document.getElementById('pgNext').addEventListener('click', function () { goPage(PAGE + 1); });
+
+// 列表是异步渲染的，浏览器自带的滚动位置恢复往往赶在内容插入之前，
+// 结果就是"回来了但停在顶上"。所以自己记一次、渲染完再滚回去。
+// key 每次现算：切换筛选后网址变了，位置要按"那一屏"分开记，
+// 否则从"待签收"返回会滚到"全部"那一屏的位置。
+function scrollKey() {
+  return 'notices:scroll:' + location.pathname + location.search;
+}
+var scrollRestored = false;
+function restoreScroll() {
+  if (scrollRestored) return;
+  scrollRestored = true;
+  var y = 0;
+  try { y = parseInt(sessionStorage.getItem(scrollKey()) || '0', 10) || 0; } catch (e) {}
+  if (y > 0) window.scrollTo(0, y);
+}
+window.addEventListener('beforeunload', function () {
+  try { sessionStorage.setItem(scrollKey(), String(window.scrollY)); } catch (e) {}
+});
+
+{% if can('notice.receive') %}
+function loadTodo() {
+  api('/api/notices?recv=dispatched').then(function (j) {
+    var card = document.getElementById('todoCard');
+    var box = document.getElementById('todoList');
+    if (j.code !== 0) {
+      // 待办问不出来就明说，不能悄悄把卡片藏掉——"没有待办"和
+      // "待办没取到"对社区来说是天差地别的两件事
+      card.style.display = '';
+      box.innerHTML = '<div style="padding:10px 0;color:#c0392b;font-size:13px">'
+        + '待办读取失败：' + esc(j.msg || '未知原因') + '</div>';
+      return;
+    }
+    if (!j.data.items.length) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    box.innerHTML = j.data.items.map(function (n) {
+      return '<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--border)">'
+        + '<div style="flex:1;min-width:0">'
+        + '<a href="' + detailHref(n.id) + '" style="color:inherit;text-decoration:none"><b>' + esc(n.title) + '</b></a>'
+        + '<div style="font-size:12px;color:var(--muted);margin-top:3px">'
+        + esc(n.issuer) + (n.doc_no ? ' · ' + esc(n.doc_no) : '')
+        + (n.receiver_org ? ' · 收文单位 ' + esc(n.receiver_org) : '')
+        + (n.deadline ? ' · 时限 ' + n.deadline : '') + '</div></div>'
+        + '<button class="btn btn-primary" style="padding:6px 14px;white-space:nowrap" onclick="doReceive(' + n.id + ')">签收</button>'
+        + '</div>';
+    }).join('');
+  });
+}
+function doReceive(id) {
+  api('/api/notices/' + id + '/receive', {method: 'POST'}).then(function (j) { alert(j.msg); load(); });
+}
+{% else %}
+function loadTodo() {}
+{% endif %}
+// 转义统一用 base.html 的全局 esc()。
+// 这里原来又定义了一个本地的 esc（只转 & < > 三个字符），
+// 函数声明提升会覆盖掉全局那份 —— 也就是说本页实际用的是弱版本，
+// 而其余 40 多处 innerHTML 都以为自己在用强版本（含引号转义）。
+function msgOf(j) {
+  if (j.code !== 0) return j.msg || '操作失败';
+  var m = (j.data && j.data.msg) || j.msg;
+  return (m && m !== 'ok') ? m : '操作完成';
+}
+function act(id, what) {
+  api('/api/notices/' + id + '/' + what, { method: 'POST' }).then(j => { alert(msgOf(j)); load(); });
+}
+function markFilter() {
+  document.querySelectorAll('[data-filter]').forEach(function (b) {
+    var on = (b.dataset.filter || '') === filter;
+    b.classList.toggle('btn-primary', on);
+    b.classList.toggle('btn-ghost', !on);
+  });
+}
+document.querySelectorAll('[data-filter]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    filter = b.dataset.filter || '';
+    // 换筛选一律回第 1 页：否则停在"待签收第 3 页"，切到"已发布"就是一页空表
+    PAGE = 1;
+    // replaceState 而不是 push：切筛选不该在浏览历史里堆一长串，
+    // 否则用户点三次筛选再按后退，要按三次才退得出去
+    var u = new URL(location.href);
+    u.searchParams.delete('status');
+    u.searchParams.delete('recv');
+    u.searchParams.delete('pin');
+    u.searchParams.delete('page');
+    if (filter) {
+      var i = filter.indexOf(':');
+      u.searchParams.set(filter.slice(0, i), filter.slice(i + 1));
+    }
+    history.replaceState(null, '', u);
+    markFilter();
+    load();
+  });
+});
+markFilter();
+var btnScan = document.getElementById('btnScan');
+if (btnScan) btnScan.addEventListener('click', function () {
+  btnScan.disabled = true; btnScan.textContent = '扫描中…';
+  api('/api/notices/scan', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ auto_publish: document.getElementById('autoPub').checked })
+  }).then(function (j) {
+    btnScan.disabled = false; btnScan.textContent = '扫描目录并导入';
+    if (j.code !== 0) { alert(j.msg); return; }
+    var d = j.data, lines = ['<b>' + d.msg + '</b>'];
+    d.imported.forEach(x => lines.push('✅ 已发布：' + esc(x.title)));
+    d.pending.forEach(x => lines.push('⏳ 待确认：' + esc(x.file) + ' — ' + esc(x.note)));
+    d.failed.forEach(x => lines.push('❌ 失败：' + esc(x.file) + ' — ' + esc(x.why)));
+    var out = document.getElementById('scanOut');
+    out.style.display = ''; out.innerHTML = lines.join('<br>');
+    load();
+  });
+});
+var btnT = document.getElementById('btnToggleD');
+if (btnT) btnT.addEventListener('click', function () {
+  var f = document.getElementById('dispatchForm');
+  var open = f.style.display === 'none';
+  f.style.display = open ? '' : 'none';
+  btnT.textContent = open ? '收起' : '展开填写';
+  if (open && !document.getElementById('dIssued').value) {
+    document.getElementById('dIssued').value = new Date().toISOString().slice(0, 10);
+  }
+});
+var btnD = document.getElementById('btnDispatch');
+if (btnD) btnD.addEventListener('click', function () {
+  var d = {
+    title: document.getElementById('dTitle').value.trim(),
+    issuer: document.getElementById('dIssuer').value.trim(),
+    doc_no: document.getElementById('dDocNo').value.trim(),
+    receiver_org: document.getElementById('dRecv').value.trim(),
+    issued_at: document.getElementById('dIssued').value,
+    deadline: document.getElementById('dDeadline').value,
+    body_md: document.getElementById('dBody').value
+  };
+  if (!d.title || !d.body_md) { alert('标题和正文都要填'); return; }
+  btnD.disabled = true; btnD.textContent = '投递中…';
+  api('/api/notices/dispatch', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(d)
+  }).then(function (j) {
+    btnD.disabled = false; btnD.textContent = '投递给社区';
+    alert(j.code === 0 ? '已投递，社区工作台会出现收文待办' : j.msg);
+    if (j.code === 0) {
+      document.getElementById('dTitle').value = '';
+      document.getElementById('dBody').value = '';
+      load();
+    }
+  });
+});
+load();
+</script>
+{% endblock %}

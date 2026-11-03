@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 内联 SVG 图标：不额外落一个文件，也不用再让浏览器为 /favicon.ico 吃一个 404 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23206bc4'/%3E%3Ctext x='32' y='45' font-size='34' text-anchor='middle' fill='%23fff' font-family='sans-serif'%3E%E7%A4%BE%3C/text%3E%3C/svg%3E">
+<title>申请账号 · 社区极简减负智能体平台</title>
+<link rel="stylesheet" href="{{ asset('css/login.css') }}">
+<style>
+  .form-card{max-width:460px}
+  .form-card label{display:block;margin:14px 0 6px;font-size:13px;color:#41556f;font-weight:600}
+  .form-card input[type=text],.form-card input[type=password],.form-card input[type=tel]{
+    width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid #d3dded;
+    border-radius:9px;font-size:14px;background:#fbfdff;color:#12263f;
+  }
+  .form-card input:focus{outline:none;border-color:#7fa7e0;background:#fff;
+    box-shadow:0 0 0 3px rgba(32,107,196,.12)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .tip{font-size:12px;color:#7b8fa7;margin-top:6px;line-height:1.6}
+  .steps{display:flex;gap:8px;margin:18px 0 4px}
+  .step{flex:1;padding:10px 8px;border-radius:9px;background:#f2f6fc;font-size:12px;color:#5b7392;text-align:center}
+  .step b{display:block;color:#206bc4;font-size:13px;margin-bottom:2px}
+  .step.on{background:#e8f1ff;box-shadow:inset 0 0 0 1.5px #a9c7ec}
+  .back{display:inline-block;margin-top:16px;font-size:13px;color:#5b7392;text-decoration:none}
+  .back:hover{color:#206bc4}
+  /* 手机：两列并排的姓名/电话在 375px 上每格只剩 150px，输入框里的
+     11 位手机号会被截断；改成一行一个。字号提到 16px 是 iOS 的自动放大阈值。 */
+  @media (max-width:640px){
+    .two{grid-template-columns:1fr;gap:0;}
+    .form-card input[type=text],.form-card input[type=password],.form-card input[type=tel]{font-size:16px;}
+    .step{padding:9px 5px;font-size:11.5px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap" style="justify-content:center">
+
+  <section class="brand-side">
+    <div class="logo-row">
+      <div class="logo">🏘️</div>
+      <div><b>社区极简减负智能体平台</b><small>Multi-Agent Community Workbench</small></div>
+    </div>
+    <h1>新同事<br>先申请，再审权限</h1>
+    <p class="lead">社区工作者是流动岗位。自己填表、管理员审核时按岗位勾权限，比"共用老账号"更说得清责任。</p>
+
+    <div class="steps">
+      <div class="step on"><b>① 填表</b>姓名与单位</div>
+      <div class="step"><b>② 审核</b>管理员确认身份</div>
+      <div class="step"><b>③ 授权</b>按岗位勾权限点</div>
+    </div>
+
+    <ul class="feats">
+      <li><span class="fi">①</span><div><b>默认零权限</b><small>注册完成不等于能办事，审核通过才开通</small></div></li>
+      <li><span class="fi">②</span><div><b>按人授权</b><small>同一岗位可以给不同权限，不用为了一个人改整个角色</small></div></li>
+      <li><span class="fi">③</span><div><b>全程留痕</b><small>注册、审核、授权、停用都写审计日志</small></div></li>
+    </ul>
+
+    <div class="brand-foot"><span class="dot"></span>本系统运行于内网 · 大模型本地推理 · 外网调用 0 次</div>
+  </section>
+
+  <section class="form-side">
+    <div class="form-card">
+      <h2>申请工作账号</h2>
+      <p class="hint">提交后账号处于「待审核」，管理员审核时会按您的岗位勾选权限</p>
+
+      {% if err %}<div class="err">⚠️ {{ err }}</div>{% endif %}
+
+      <form method="post" autocomplete="off">
+        <label>登录账号</label>
+        <input type="text" name="username" value="{{ form.username }}" placeholder="如 zhaoshegong" required autofocus>
+        <div class="tip">字母开头，3~20 位，可用字母、数字、下划线</div>
+
+        <div class="two">
+          <div>
+            <label>真实姓名</label>
+            <input type="text" name="name" value="{{ form.name }}" placeholder="如 赵社工" required>
+          </div>
+          <div>
+            <label>联系电话</label>
+            <input type="tel" name="phone" value="{{ form.phone }}" placeholder="选填，便于核实">
+          </div>
+        </div>
+
+        <label>所属单位</label>
+        <input type="text" name="org" value="{{ form.org }}" required>
+
+        <div class="two">
+          <div>
+            <label>设置密码</label>
+            <input type="password" name="password" placeholder="至少 8 位" required>
+          </div>
+          <div>
+            <label>确认密码</label>
+            <input type="password" name="password2" placeholder="再输一次" required>
+          </div>
+        </div>
+
+        <button class="submit" type="submit" style="margin-top:20px">提交申请</button>
+      </form>
+
+      <div class="note">🔐 账号与权限变更均写入审计日志，可在管理员的「用户与权限」中查看。</div>
+      <a class="back" href="{{ url_for('views.login') }}">← 已有账号，返回登录</a>
+    </div>
+  </section>
+</div>
+</body>
+</html>

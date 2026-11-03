@@ -1,0 +1,71 @@
+# ---- 密钥与本地配置：绝不能提交 ----
+.secret_key
+.llm_gateway_token
+llm.publish.json
+llm.json
+.wbapp_*.genie
+
+# ---- AI 会话记录与平台元数据 ----
+.workbuddy/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ---- 数据库：演示数据由 scripts/seed_demo.py 重建，不入库 ----
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.bak*
+data/smoke_*.db*
+# 回归跑完后残留的测试库集中搬到这里（换数据源后一次能攒上百个）
+data/_smoke_trash/
+data/_sync/
+data/_ecsdeploy/
+
+# ---- 测试与一次性分析的中间产物 ----
+data/_evidence_smoke/
+data/_synctest/
+data/_case_out/
+data/_cases*.json
+
+# ---- 证据附件：居民上传的实物照片，属个人敏感信息，绝不入库 ----
+data/evidence/
+data/backups/
+
+# ---- 真实社区台账原件：含身份证号/姓名/电话，属个人敏感信息，绝不入库 ----
+# 只留在本机；入库的是 scripts/import_ledger.py 脱敏后的 person/person_tag 两表
+data/incoming/
+
+# ---- 运行产物 ----
+output/
+instance/
+*.log
+logs/*
+!logs/ablation.log
+
+# ---- 大二进制：README 已写明下载方式，不进仓库 ----
+scripts/bin/*.exe
+scripts/bin/*.zip
+
+# ---- 论文成稿：整个 thesis/ 不入库（正文、Word/PDF、插图都留本地）----
+/thesis/
+
+# ---- 同步/部署临时件 ----
+*.tar.gz
+*.zip
+!docs/img/*.zip
+
+# ---- 系统杂项 ----
+Thumbs.db
+desktop.ini
+NUL
+.DS_Store
+
+# 数据库备份与恢复演练产物（含业务数据，不进仓库）
+data/backups/
+data/restored-*.db

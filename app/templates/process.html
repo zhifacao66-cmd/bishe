@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}流程监控 · 极简减负平台{% endblock %}
+{% block page_title %}流程监控台{% endblock %}
+{% block page_sub %}从工单流转日志里算「卡在哪一步」 · 每条结论都标样本量{% endblock %}
+
+{% block content %}
+<style>
+  .pnote{background:#f5f8fd;border:1px solid #dde7f4;border-radius:10px;padding:11px 15px;
+    font-size:12.5px;color:#4a5b70;line-height:1.75;margin-bottom:14px;}
+  .pnote b{color:#206bc4;}
+  .ptabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+  .ptab{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 15px;
+    font-size:13px;cursor:pointer;color:#4a5b70;font-family:inherit;}
+  .ptab.on{background:#1e5eff;border-color:#1e5eff;color:#fff;}
+  .pane{display:none;}
+  .pane.on{display:block;}
+  .tw{overflow-x:auto;}
+  table.tb{width:100%;border-collapse:collapse;font-size:13px;}
+  table.tb th{text-align:left;font-weight:600;color:#5b6b80;font-size:12px;
+    padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  table.tb td{padding:9px 10px;border-bottom:1px solid #f0f3f8;vertical-align:top;}
+  table.tb tr:last-child td{border-bottom:none;}
+  .num{font-family:Consolas,monospace;}
+  .na{color:#a8b3c2;font-size:11.5px;}
+  .tag{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:5px;
+    background:#eef3fb;color:#3d6fa8;margin:1px 3px 1px 0;white-space:nowrap;}
+  .tag.warn{background:#fdeee0;color:#b5761c;}
+  .tag.err{background:#fdeaea;color:#b03131;}
+  .tag.ok{background:#e6f6ec;color:#1a7f4b;}
+  .bar{height:6px;border-radius:3px;background:#eef2f8;overflow:hidden;min-width:60px;}
+  .bar i{display:block;height:100%;background:#5b8def;}
+  .path{font-family:Consolas,monospace;font-size:12px;color:#33475f;}
+  .drill{font-family:Consolas,monospace;font-size:11.5px;color:#206bc4;cursor:pointer;
+    border-bottom:1px dashed #b9d3f2;}
+  .drill:hover{color:#1a52e0;}
+  .smp{font-size:11px;color:#8a97a8;}
+</style>
+
+<!-- 卡片 -->
+<div class="card stat col-3"><div class="ic" style="background:#e3edfb">📋</div>
+  <div><div class="num" id="cTotal">-</div><div class="lbl">工单总数</div></div></div>
+<div class="card stat col-3"><div class="ic" style="background:#fdf0d7">⏳</div>
+  <div><div class="num" id="cStuck">-</div><div class="lbl">当前卡住</div></div></div>
+<div class="card stat col-3"><div class="ic" style="background:#fdeaea">🚨</div>
+  <div><div class="num" id="cOver">-</div><div class="lbl">超 SLA</div></div></div>
+<div class="card stat col-3"><div class="ic" style="background:#f3ecfb">🗓️</div>
+  <div><div class="num" id="cLong">-</div><div class="lbl">超 30 天未结</div></div></div>
+
+<div class="col-12">
+  <div class="pnote">
+    <b>先看样本量，再看结论。</b><span id="sampleNote">加载中…</span><br>
+    <span style="color:#8a97a8">流程挖掘只做事后分析，不改任何工单状态。分位数在样本不足时
+      显示「样本不足」而不是算一个出来——n=1 的 P90 就是把那一条换个名字。</span>
+  </div>
+</div>
+
+<div class="col-12">
+  <div class="ptabs">
+    <button class="ptab on" data-p="p1">瓶颈排行</button>
+    <button class="ptab" data-p="p2">流程路径</button>
+    <button class="ptab" data-p="p3">卡在哪一环</button>
+    <button class="ptab" data-p="p4">异常清单</button>
+  </div>
+
+  <!-- 瓶颈 -->
+  <div class="pane on" id="p1">
+    <div class="card col-12">
+      <div class="card-h"><h2>⏱️ 各环节停留时长</h2>
+        <span class="hint">按平均时长排序 · 平均值会被极值拉高，中位数更稳</span></div>
+      <div class="tw"><table class="tb">
+        <thead><tr><th>环节</th><th>样本 n</th><th>平均</th><th>中位数</th>
+          <th>P90</th><th>最短</th><th>最长</th><th style="width:130px">时长对比</th></tr></thead>
+        <tbody id="stageBody"><tr><td colspan="8" class="na">加载中…</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- 路径 -->
+  <div class="pane" id="p2">
+    <div class="card col-12">
+      <div class="card-h"><h2>🔀 流程路径分布</h2>
+        <span class="hint">同一组动作序列出现几次 · 路径越散，说明流程越没标准化</span></div>
+      <div class="tw"><table class="tb">
+        <thead><tr><th>路径</th><th>件数</th><th>占比</th><th style="width:120px"></th></tr></thead>
+        <tbody id="pathBody"><tr><td colspan="4" class="na">加载中…</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- 卡点 -->
+  <div class="pane" id="p3">
+    <div class="card col-12">
+      <div class="card-h"><h2>🧊 当前卡住的单</h2>
+        <span class="hint">按「最后一次动作距今」排序 · 基准是最后动作，不是创建时间</span></div>
+      <div class="tw"><table class="tb">
+        <thead><tr><th>工单号</th><th>卡在哪</th><th>单位 / 处理人</th>
+          <th>最后动作</th><th>已搁置</th><th>超期倍数</th></tr></thead>
+        <tbody id="stuckBody"><tr><td colspan="6" class="na">加载中…</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- 异常 -->
+  <div class="pane" id="p4">
+    <div class="card col-12">
+      <div class="card-h"><h2>⚠️ 异常清单</h2>
+        <span class="hint">规则引擎判定，每条给出命中原因与建议动作</span></div>
+      <div class="tw"><table class="tb">
+        <thead><tr><th>工单号</th><th>状态</th><th>命中原因</th><th>建议动作</th></tr></thead>
+        <tbody id="anomBody"><tr><td colspan="4" class="na">加载中…</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var D = null;
+
+function fmtH(h) {
+  if (h == null) return '<span class="na">—</span>';
+  if (h < 1) return Math.round(h * 60) + ' 分钟';
+  if (h < 48) return h.toFixed(1) + ' 小时';
+  return (h / 24).toFixed(1) + ' 天';
+}
+
+/* P90 / 中位数在样本不足时由服务端返回 null，这里必须显示「样本不足」
+   而不是兜一个 0 或一条横线——横线会被读成"这一格没数据"，
+   而真实意思是"数据量不够算这个指标"，两者对决策的影响完全不同。 */
+function statCell(v, n, need) {
+  if (v == null) return '<span class="na" title="需要 n≥' + need + '">样本不足</span>';
+  return '<span class="num">' + fmtH(v) + '</span>';
+}
+
+function render(d) {
+  var s = d.summary;
+  document.getElementById('cTotal').textContent = s.orders;
+  document.getElementById('cStuck').textContent = s.stuck;
+  document.getElementById('cOver').textContent = s.overdue;
+  document.getElementById('cLong').textContent = s.long_pending;
+  document.getElementById('sampleNote').textContent = s.sample_note;
+
+  var maxAvg = 1;
+  (d.stages || []).forEach(function (x) { if ((x.avg || 0) > maxAvg) maxAvg = x.avg; });
+
+  document.getElementById('stageBody').innerHTML = (d.stages || []).map(function (x) {
+    var w = Math.max(3, Math.round((x.avg || 0) / maxAvg * 100));
+    return '<tr>' +
+      '<td><b>' + esc(x.label) + '</b></td>' +
+      '<td><span class="num">' + x.n + '</span></td>' +
+      '<td><span class="num">' + fmtH(x.avg) + '</span></td>' +
+      '<td>' + statCell(x.median, x.n, d.min_n_median) + '</td>' +
+      '<td>' + statCell(x.p90, x.n, d.min_n_p90) + '</td>' +
+      '<td><span class="num">' + fmtH(x.min) + '</span></td>' +
+      '<td><span class="num">' + fmtH(x.max) + '</span></td>' +
+      '<td><div class="bar"><i style="width:' + w + '%"></i></div></td>' +
+      '</tr>';
+  }).join('') || '<tr><td colspan="8" class="na">还没有流转记录</td></tr>';
+
+  document.getElementById('pathBody').innerHTML = (d.paths || []).map(function (x) {
+    return '<tr><td class="path">' + esc(x.path) + '</td>' +
+      '<td><span class="num">' + x.count + '</span></td>' +
+      '<td><span class="num">' + (x.ratio * 100).toFixed(0) + '%</span></td>' +
+      '<td><div class="bar"><i style="width:' + Math.max(2, x.ratio * 100) + '%"></i></div></td></tr>';
+  }).join('') || '<tr><td colspan="4" class="na">暂无</td></tr>';
+
+  document.getElementById('stuckBody').innerHTML = (d.stuck || []).map(function (x) {
+    var cls = (x.over_ratio || 0) >= 3 ? 'err' : ((x.over_ratio || 0) >= 1 ? 'warn' : '');
+    return '<tr><td><span class="drill" data-oid="' + x.id + '">' + esc(x.order_no) + '</span></td>' +
+      '<td><span class="tag ' + (/无人接单|转派后/.test(x.stage) ? 'warn' : '') + '">' + esc(x.stage) + '</span></td>' +
+      '<td><span class="who">' + esc(x.property_co || '—') +
+        (x.assignee ? '<small>' + esc(x.assignee) + '</small>' : '') + '</span></td>' +
+      '<td>' + esc(x.last_action_label) + '<div class="smp">' + esc(x.last_at) + '</div></td>' +
+      '<td><span class="num">' + fmtH(x.idle_hours) + '</span></td>' +
+      '<td>' + (x.over_ratio == null ? '<span class="na">—</span>'
+        : '<span class="tag ' + cls + '">' + x.over_ratio.toFixed(1) + ' ×</span>') + '</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="na">没有卡住的单</td></tr>';
+
+  document.getElementById('anomBody').innerHTML = (d.anomalies || []).map(function (x) {
+    var advice = (x.reasons || []).map(function (r) { return r.advice; });
+    var uniq = advice.filter(function (v, i) { return advice.indexOf(v) === i; });
+    return '<tr><td><span class="drill" data-oid="' + x.id + '">' + esc(x.order_no) + '</span></td>' +
+      '<td><span class="tag">' + esc(x.status) + '</span></td>' +
+      '<td>' + (x.reasons || []).map(function (r) {
+        return '<span class="tag err">' + esc(r.name) + '</span>';
+      }).join('') + '</td>' +
+      '<td style="font-size:12.5px;color:#4a5b70">' + esc(uniq.join('；')) + '</td></tr>';
+  }).join('') || '<tr><td colspan="4" class="na">没有命中的异常</td></tr>';
+
+  // 点单号跳到工单页（那边能看完整流转与证据链）
+  Array.prototype.forEach.call(document.querySelectorAll('.drill'), function (el) {
+    el.onclick = function () {
+      window.location.href = '/orders?focus=' + el.getAttribute('data-oid');
+    };
+  });
+}
+
+function load() {
+  api('/api/insight/process').then(function (r) {
+    D = r.data; render(D);
+  }).fail(function (e) {
+    toast(e.message || '监控数据加载失败', 'err');
+    document.getElementById('sampleNote').textContent = '加载失败，请刷新重试';
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  Array.prototype.forEach.call(document.querySelectorAll('.ptab'), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll('.ptab'), function (x) {
+        x.classList.remove('on');
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.pane'), function (x) {
+        x.classList.remove('on');
+      });
+      b.classList.add('on');
+      document.getElementById(b.getAttribute('data-p')).classList.add('on');
+    };
+  });
+  load();
+});
+</script>
+{% endblock %}

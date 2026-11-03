@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+{% block title %}风险预警 · 极简减负平台{% endblock %}
+{% block page_title %}风险预警台{% endblock %}
+{% block page_sub %}价值在尾部，不在平均 · 把反复投诉、踢皮球、长期未结挑出来{% endblock %}
+
+{% block content %}
+<style>
+  .pnote{background:#fdf8f2;border:1px solid #f2e3cd;border-radius:10px;padding:11px 15px;
+    font-size:12.5px;color:#6b5539;line-height:1.75;margin-bottom:14px;}
+  .pnote b{color:#a8650f;}
+  .ptabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+  .ptab{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 15px;
+    font-size:13px;cursor:pointer;color:#4a5b70;font-family:inherit;}
+  .ptab.on{background:#1e5eff;border-color:#1e5eff;color:#fff;}
+  .pane{display:none;}
+  .pane.on{display:block;}
+  .tw{overflow-x:auto;}
+  table.tb{width:100%;border-collapse:collapse;font-size:13px;}
+  table.tb th{text-align:left;font-weight:600;color:#5b6b80;font-size:12px;
+    padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  table.tb td{padding:9px 10px;border-bottom:1px solid #f0f3f8;vertical-align:top;}
+  table.tb tr:last-child td{border-bottom:none;}
+  .num{font-family:Consolas,monospace;}
+  .na{color:#a8b3c2;font-size:11.5px;}
+  .sc{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;
+    border-radius:9px;font-family:Consolas,monospace;font-size:15px;font-weight:700;}
+  .sc.hi{background:#fdeaea;color:#b03131;}
+  .sc.mi{background:#fdf0d7;color:#a8650f;}
+  .sc.lo{background:#eef3fb;color:#3d6fa8;}
+  .tag{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:5px;
+    background:#eef3fb;color:#3d6fa8;margin:1px 3px 1px 0;white-space:nowrap;}
+  .tag.err{background:#fdeaea;color:#b03131;}
+  .tag.warn{background:#fdeee0;color:#b5761c;}
+  .tag.ok{background:#e6f6ec;color:#1a7f4b;}
+  /* 分项拆解：社区要拿这张表去跟物业谈，必须看得见分是怎么来的 */
+  .brk{font-size:12px;color:#4a5b70;line-height:1.9;}
+  .brk span{color:#8a97a8;}
+  .brk em{font-style:normal;font-family:Consolas,monospace;color:#b03131;font-weight:600;}
+  .tl{position:relative;padding-left:16px;margin-top:6px;}
+  .tl:before{content:'';position:absolute;left:4px;top:6px;bottom:6px;width:2px;background:#e7ecf3;}
+  .tl-i{position:relative;padding-bottom:10px;font-size:12.5px;}
+  .tl-i:last-child{padding-bottom:0;}
+  .tl-i:before{content:'';position:absolute;left:-15px;top:5px;width:8px;height:8px;
+    border-radius:50%;background:#fff;border:2px solid #b9d3f2;}
+  .tl-i time{color:#8a97a8;font-family:Consolas,monospace;font-size:11.5px;margin-right:6px;}
+  .drill{font-family:Consolas,monospace;font-size:11.5px;color:#206bc4;cursor:pointer;
+    border-bottom:1px dashed #b9d3f2;}
+  .drill:hover{color:#1a52e0;}
+  .quad{display:flex;gap:10px;flex-wrap:wrap;}
+  .qbox{flex:1 1 150px;border:1px solid var(--border);border-radius:9px;padding:10px 12px;background:#fbfcfe;}
+  .qbox b{display:block;font-family:Consolas,monospace;font-size:19px;color:#206bc4;}
+  .qbox span{font-size:11.5px;color:#8a97a8;}
+  .qual{background:#fdf1f1;border:1px solid #f3c1c1;border-radius:9px;padding:10px 14px;
+    font-size:12.5px;color:#b03131;line-height:1.7;margin-bottom:12px;}
+</style>
+
+<div class="card stat col-3"><div class="ic" style="background:#fdeaea">🔴</div>
+  <div><div class="num" id="cHigh">-</div><div class="lbl">高危</div></div></div>
+<div class="card stat col-3"><div class="ic" style="background:#fdf0d7">🟡</div>
+  <div><div class="num" id="cWatch">-</div><div class="lbl">需关注</div></div></div>
+<div class="card stat col-3"><div class="ic" style="background:#e3edfb">🔁</div>
+  <div><div class="num" id="cRepeat">-</div><div class="lbl">反复报事的人</div></div></div>
+<div class="card stat col-3"><div class="ic" style="background:#f3ecfb">🥍</div>
+  <div><div class="num" id="cPp">-</div><div class="lbl">踢皮球的单</div></div></div>
+
+<div class="col-12">
+  <div class="pnote">
+    <b>风险分是排序工具，不是概率。</b>它只用来决定「这 20 件里先看哪 5 件」。
+    权重是经验值（不是训练出来的），每一项都拆开显示，可以核对、也可以否决。
+    <span id="sampleNote" style="display:block;margin-top:5px;color:#9a8a78"></span>
+  </div>
+</div>
+
+<div class="col-12">
+  <div class="ptabs">
+    <button class="ptab on" data-p="q1">风险榜</button>
+    <button class="ptab" data-p="q2">反复投诉</button>
+    <button class="ptab" data-p="q3">踢皮球</button>
+    <button class="ptab" data-p="q4">长期未结</button>
+    <button class="ptab" data-p="q5">投诉热点</button>
+  </div>
+
+  <!-- 风险榜 -->
+  <div class="pane on" id="q1">
+    <div class="card col-12">
+      <div class="card-h"><h2>🎯 风险排序</h2>
+        <span class="hint">分数拆成 分项 + 分值 + 依据 · 悬浮可看权重表</span></div>
+      <div class="tw"><table class="tb">
+        <thead><tr><th>分</th><th>等级</th><th>工单</th><th>分项拆解</th></tr></thead>
+        <tbody id="warnBody"><tr><td colspan="4" class="na">加载中…</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- 反复投诉 -->
+  <div class="pane" id="q2">
+    <div class="card col-12">
+      <div class="card-h"><h2>🔁 反复投诉</h2>
+        <span class="hint">同一手机号或同一地址多次报事 · 重复报事不是冗余，是上一轮没解决的证据</span></div>
+      <div class="tw"><table class="tb">
+        <thead><tr><th>居民</th><th>地址</th><th>次数</th><th>时间跨度</th><th>诉求时间线</th></tr></thead>
+        <tbody id="repeatBody"><tr><td colspan="5" class="na">加载中…</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- 踢皮球 -->
+  <div class="pane" id="q3">
+    <div class="card col-12">
+      <div class="card-h"><h2>🥍 踢皮球的单</h2>
+        <span class="hint">转派多次，重点是「跨单位」——单位内部换人是正常工作分配</span></div>
+      <div class="tw"><table class="tb">
+        <thead><tr><th>工单</th><th>转派</th><th>经过单位</th><th>转移链</th></tr></thead>
+        <tbody id="ppBody"><tr><td colspan="4" class="na">加载中…</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- 长期未结 -->
+  <div class="pane" id="q4">
+    <div class="card col-12">
+      <div class="card-h"><h2>🗓️ 长期未结</h2>
+        <span class="hint">超过 30 天仍未办结 · 性质已从「效率问题」变成「矛盾积累」</span></div>
+      <div class="tw"><table class="tb">
+        <thead><tr><th>工单</th><th>内容</th><th>状态</th><th>单位</th><th>挂了多久</th><th>超期倍数</th></tr></thead>
+        <tbody id="lpBody"><tr><td colspan="6" class="na">加载中…</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- 热点 -->
+  <div class="pane" id="q5">
+    <div class="col-12" id="clusterWarn" style="display:none">
+      <div class="qual" id="clusterWarnText"></div>
+    </div>
+    <div class="card col-12">
+      <div class="card-h"><h2>🔥 投诉热点（主题归并）</h2>
+        <span class="hint">按关键词表归并 · 一条诉求可命中多个主题，数量之和大于诉求总数属正常</span></div>
+      <div class="tw"><table class="tb">
+        <thead><tr><th>主题</th><th>件数</th><th>未办结</th><th>涉及人数</th><th>样例</th></tr></thead>
+        <tbody id="hotBody"><tr><td colspan="5" class="na">加载中…</td></tr></tbody>
+      </table></div>
+    </div>
+    <div class="card col-12">
+      <div class="card-h"><h2>🧩 文本聚类</h2>
+        <span class="hint" id="cluMeta">—</span></div>
+      <div class="tw"><table class="tb">
+        <thead><tr><th>簇</th><th>成员</th><th>簇内关键词</th></tr></thead>
+        <tbody id="cluBody"><tr><td colspan="3" class="na">加载中…</td></tr></tbody>
+      </table></div>
+    </div>
+    <div class="card col-12">
+      <div class="card-h"><h2>🔤 高频字串（词表外的新词候选）</h2>
+        <span class="hint">按「出现在几条不同诉求里」排序 · 这是词表之外唯一从数据里长出来的东西</span></div>
+      <div class="card" style="padding:12px 14px;border:none;box-shadow:none">
+        <div id="ngBody" style="line-height:2.1"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var D = null, T = null;
+
+function lvlCls(l) { return l === '高危' ? 'hi' : (l === '关注' ? 'mi' : 'lo'); }
+
+function renderRisk(d) {
+  var s = d.summary;
+  document.getElementById('cHigh').textContent = s.high;
+  document.getElementById('cWatch').textContent = s.watch;
+  document.getElementById('cRepeat').textContent = d.with_people ? s.repeat_people : '—';
+  document.getElementById('cPp').textContent = s.ping_pong;
+  document.getElementById('sampleNote').textContent = s.sample_note;
+
+  document.getElementById('warnBody').innerHTML = (d.warnings || []).map(function (x) {
+    var brk = (x.items || []).map(function (i) {
+      return '<div class="brk"><em>+' + i.score + '</em> ' + esc(i.name) +
+             ' <span>· ' + esc(i.reason) + '</span></div>';
+    }).join('');
+    if (x.capped) {
+      brk += '<div class="brk"><span>原始分 ' + x.raw + '，已封顶到 ' + x.score +
+             '（封顶是为了排序不失真，两个 100 分不代表同样严重）</span></div>';
+    }
+    return '<tr><td><div class="sc ' + lvlCls(x.level) + '">' + x.score + '</div></td>' +
+      '<td><span class="tag ' + (x.level === '高危' ? 'err' : 'warn') + '">' + esc(x.level) + '</span></td>' +
+      '<td><span class="drill" data-oid="' + x.id + '">' + esc(x.order_no) + '</span>' +
+        '<div class="na" style="margin-top:3px">' + esc(x.property_co || '—') + '</div>' +
+        '<div class="na">' + esc(x.status) + ' · ' + esc(x.created_at) + '</div></td>' +
+      '<td>' + brk + '</td></tr>';
+  }).join('') || '<tr><td colspan="4" class="na">没有命中任何风险项</td></tr>';
+
+  document.getElementById('repeatBody').innerHTML = d.with_people
+    ? ((d.repeat || []).map(function (x) {
+      var tl = (x.tickets || []).map(function (t) {
+        return '<div class="tl-i"><time>' + esc(t.at) + '</time>' +
+               esc(t.text) + ' <span class="tag">' + esc(t.status) + '</span></div>';
+      }).join('');
+      return '<tr>' +
+        '<td><b>' + esc(x.name || '—') + '</b><div class="na">' + esc(x.phone_masked) + '</div></td>' +
+        '<td>' + esc(x.address || '—') +
+          (x.same_address ? ' <span class="tag warn">同一地址</span>' : '') + '</td>' +
+        '<td><span class="tag err">' + x.times + ' 次</span></td>' +
+        '<td><span class="num">' + x.span_days + '</span> 天<div class="na">首 ' + esc(x.first_at) +
+          '<br>末 ' + esc(x.last_at) + '</div></td>' +
+        '<td><div class="tl">' + tl + '</div></td></tr>';
+    }).join('') || '<tr><td colspan="5" class="na">没有重复报事的居民</td></tr>')
+    : '<tr><td colspan="5" class="na">该视角不提供居民画像（按手机号聚合的报事次数属于居民信息）</td></tr>';
+
+  document.getElementById('ppBody').innerHTML = (d.ping_pong || []).map(function (x) {
+    var chain = (x.chain || []).map(function (c) {
+      return '<div class="tl-i"><time>' + esc(c.at) + '</time>' +
+             esc(c.from_org || '—') + ' 转出 · ' + esc(c.detail) + '</div>';
+    }).join('');
+    return '<tr><td><span class="drill" data-oid="' + x.id + '">' + esc(x.order_no) + '</span>' +
+      '<div class="na" style="margin-top:3px">' + esc(x.content) + '</div></td>' +
+      '<td><span class="tag warn">' + x.transfers + ' 次</span>' +
+        (x.cross_org ? '<span class="tag err">跨单位 ' + x.cross_org + ' 次</span>' : '') + '</td>' +
+      '<td>' + (x.orgs || []).map(function (o) { return '<span class="tag">' + esc(o) + '</span>'; }).join('') + '</td>' +
+      '<td><div class="tl">' + chain + '</div></td></tr>';
+  }).join('') || '<tr><td colspan="4" class="na">没有踢皮球的单</td></tr>';
+
+  document.getElementById('lpBody').innerHTML = (d.long_pending || []).map(function (x) {
+    return '<tr><td><span class="drill" data-oid="' + x.id + '">' + esc(x.order_no) + '</span></td>' +
+      '<td style="font-size:12.5px">' + esc(x.content) + '</td>' +
+      '<td><span class="tag">' + esc(x.status) + '</span></td>' +
+      '<td>' + esc(x.property_co || '—') + '</td>' +
+      '<td><span class="num">' + x.age_days + '</span> 天<div class="na">' + esc(x.created_at) + ' 起</div></td>' +
+      '<td><span class="tag err">' + x.over_ratio + ' ×</span></td></tr>';
+  }).join('') || '<tr><td colspan="6" class="na">没有超过 30 天未结的单</td></tr>';
+
+  Array.prototype.forEach.call(document.querySelectorAll('.drill'), function (el) {
+    el.onclick = function () {
+      window.location.href = '/orders?focus=' + el.getAttribute('data-oid');
+    };
+  });
+}
+
+function renderTopics(d) {
+  var hs = d.hotspots || {};
+  document.getElementById('hotBody').innerHTML = (hs.topics || []).map(function (x) {
+    return '<tr><td><b>' + esc(x.topic) + '</b></td>' +
+      '<td><span class="num">' + x.count + '</span> <span class="na">(' +
+        (x.ratio * 100).toFixed(0) + '%)</span></td>' +
+      '<td><span class="tag ' + (x.open ? 'err' : 'ok') + '">' + x.open + '</span></td>' +
+      '<td><span class="num">' + x.people + '</span></td>' +
+      '<td style="font-size:12px;color:#4a5b70">' +
+        (x.samples || []).map(function (s) { return esc(s.text); }).join('<br>') + '</td></tr>';
+  }).join('') || '<tr><td colspan="5" class="na">还没有可归类的诉求</td></tr>';
+
+  var cl = d.cluster || {};
+  var warn = document.getElementById('clusterWarn');
+  var meta = document.getElementById('cluMeta');
+  if (!cl.available) {
+    warn.style.display = '';
+    document.getElementById('clusterWarnText').innerHTML =
+      '<b>聚类未运行：</b>' + esc(cl.reason || '');
+    meta.textContent = '样本不足';
+    document.getElementById('cluBody').innerHTML =
+      '<tr><td colspan="3" class="na">' + esc(cl.fallback || '') + '</td></tr>';
+    return;
+  }
+  // 纯度低时必须显式提示"以词表为准"。粉色提示条不是装饰——
+  // 它决定了看的人会不会把这份聚类当成结论。
+  if (cl.quality !== '高') {
+    warn.style.display = '';
+    document.getElementById('clusterWarnText').innerHTML =
+      '<b>聚类纯度 ' + Math.round(cl.purity * 100) + '%（' + esc(cl.quality) + '）</b>：' +
+      esc(cl.limits || '');
+  } else {
+    warn.style.display = 'none';
+  }
+  meta.textContent = (cl.n + ' 条 → ' + cl.clusters + ' 簇 · 多成员簇 ' + cl.multi_clusters +
+    ' · 阈值 ' + cl.threshold + ' · 纯度 ' + Math.round(cl.purity * 100) + '%');
+  document.getElementById('cluBody').innerHTML = (cl.items || []).map(function (c) {
+    var mem = (c.members || []).map(function (m) { return esc(m.text); }).join('<br>');
+    return '<tr><td><b>' + esc(c.label) + '</b>' +
+      (c.is_new ? ' <span class="tag warn">新主题候选</span>' : '') + '</td>' +
+      '<td><span class="tag">' + c.size + ' 条</span><div style="margin-top:5px;font-size:12px;color:#4a5b70">' +
+        mem + '</div></td>' +
+      '<td>' + (c.top_terms || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</td></tr>';
+  }).join('');
+
+  document.getElementById('ngBody').innerHTML = (d.ngrams || []).map(function (x) {
+    var sz = 12 + Math.min(6, x.docs * 1.2);
+    return '<span class="tag" style="font-size:' + sz + 'px;margin:3px 4px">' +
+      esc(x.word) + ' <span class="na">' + x.docs + '</span></span>';
+  }).join('') || '<span class="na">样本不足，高频字串都只出现一次</span>';
+}
+
+function load() {
+  api('/api/insight/risk').then(function (r) { D = r.data; renderRisk(D); })
+    .fail(function (e) { toast(e.message || '预警数据加载失败', 'err'); });
+  api('/api/insight/topics').then(function (r) { T = r.data; renderTopics(T); })
+    .fail(function (e) {
+      document.getElementById('hotBody').innerHTML =
+        '<tr><td colspan="5" class="na">' + esc(e.message || '热点数据不可用') + '</td></tr>';
+      document.getElementById('cluBody').innerHTML = '<tr><td colspan="3" class="na">—</td></tr>';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  Array.prototype.forEach.call(document.querySelectorAll('.ptab'), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll('.ptab'), function (x) {
+        x.classList.remove('on');
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.pane'), function (x) {
+        x.classList.remove('on');
+      });
+      b.classList.add('on');
+      document.getElementById(b.getAttribute('data-p')).classList.add('on');
+    };
+  });
+  load();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "portal/base.html" %}
+{% block body %}
+
+<a class="p-cta" href="{{ url_for('portalviews.report') }}">
+  <span class="ico">📝</span>
+  <span>
+    <div class="t">我要反映问题</div>
+    <div class="s">楼道灯坏了、下水堵了、邻里纠纷、政策咨询</div>
+  </span>
+  <span class="arrow">›</span>
+</a>
+
+<div class="p-grid2" style="margin-bottom:14px">
+  <a class="p-tile" href="{{ url_for('portalviews.query') }}">
+    <span class="ico">🔍</span><span class="t">查办理进度</span>
+    <span class="s">手机号 + 查询码</span>
+  </a>
+  <a class="p-tile" href="{{ url_for('portalviews.notices') }}">
+    <span class="ico">📢</span><span class="t">通知公告</span>
+    <span class="s">街道、社区最新通知</span>
+  </a>
+  <a class="p-tile" href="{{ url_for('portalviews.contacts') }}">
+    <span class="ico">☎️</span><span class="t">找谁办事</span>
+    <span class="s">三级单位职责与电话</span>
+  </a>
+</div>
+
+{% if recent %}
+<div class="p-card">
+  <h2><span class="bar"></span>我最近反映的</h2>
+  <div class="p-list">
+    {% for t in recent %}
+    <a class="p-item" href="{{ url_for('portalviews.ticket', tid=t.id) }}">
+      <div class="top">
+        <span class="ttl">{{ t.raw_text[:22] }}{% if t.raw_text|length > 22 %}…{% endif %}</span>
+        <span class="tag tag-{{ t.status }}">{{ {'open':'已受理','doing':'处理中','done':'已办结'}.get(t.status, '已受理') }}</span>
+      </div>
+      <div class="meta">{{ t.created_at.strftime('%m-%d %H:%M') }} · 查询码 {{ t.code }} · {{ t.line_summary or '已登记' }}</div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="p-card">
+  <h2><span class="bar"></span>最新公告</h2>
+  {% if notices %}
+  <div class="p-list">
+    {% for n in notices %}
+    <a class="p-item" href="{{ url_for('portalviews.notice', nid=n.id) }}">
+      <div class="top">
+        <span class="ttl">{{ n.title }}</span>
+        {% if n.pinned %}<span class="tag tag-pin">置顶</span>{% endif %}
+      </div>
+      <div class="meta">{{ n.issuer }}{% if n.doc_no %} · {{ n.doc_no }}{% endif %} · {{ n.published_at.strftime('%Y-%m-%d') if n.published_at else '' }}</div>
+      {% if n.summary %}<div class="sum">{{ n.summary }}</div>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  <a class="p-btn-line" style="margin-top:10px" href="{{ url_for('portalviews.notices') }}">查看全部公告</a>
+  {% else %}
+  <p class="p-muted">暂时没有新公告。</p>
+  {% endif %}
+</div>
+
+{% if groups %}
+<div class="p-card">
+  <h2><span class="bar"></span>三级管理单位</h2>
+  {% for g in groups %}
+    {% for c in g['items'] %}
+    <div class="p-org">
+      <div class="n">{{ c.name }}<span class="lv {{ g.level }}">{{ g.label }}</span></div>
+      <div class="line"><b>职责</b><span>{{ c.duty }}</span></div>
+      <div class="line"><b>电话</b><span>{{ c.phone }} · {{ c.service_hours }}</span></div>
+      <div class="line"><b>地址</b><span>{{ c.address }}</span></div>
+      <a class="call" href="tel:{{ c.phone|replace(' ','') }}">拨打电话 ›</a>
+    </div>
+    {% endfor %}
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

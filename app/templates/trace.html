@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}协作轨迹 · 极简减负平台{% endblock %}
+{% block page_title %}Agent 协作轨迹{% endblock %}
+{% block page_sub %}一次诉求处理 = 一条轨迹 · 哪个 Agent 定了什么、谁不同意、谁裁定{% endblock %}
+
+{% block content %}
+<style>
+  .tc-note{background:#f5f8fd;border:1px solid #dde7f4;border-radius:10px;padding:11px 15px;
+    font-size:12.5px;color:#4a5b70;line-height:1.75;margin-bottom:14px;}
+  .tc-note b{color:#206bc4;}
+  .tc-wrap{display:grid;grid-template-columns:330px 1fr;gap:14px;align-items:start;}
+  @media (max-width:900px){ .tc-wrap{grid-template-columns:1fr;} }
+
+  .run{border-bottom:1px solid #f0f3f8;padding:9px 12px;cursor:pointer;}
+  .run:last-child{border-bottom:none;}
+  .run:hover{background:#f7faff;}
+  .run.on{background:#eef4ff;border-left:3px solid #1e5eff;padding-left:9px;}
+  .run .rid{font-family:Consolas,monospace;font-size:12.5px;color:#206bc4;font-weight:600;}
+  .run .rmeta{font-size:11.5px;color:#8a97a8;margin-top:2px;}
+  .run .rbadge{float:right;font-size:11px;padding:1px 7px;border-radius:5px;
+    background:#e6f6ec;color:#1a7f4b;}
+  .run .rbadge.warn{background:#fdeee0;color:#b5761c;}
+
+  .steprow{display:grid;grid-template-columns:26px 92px 1fr;gap:10px;padding:9px 0;
+    border-bottom:1px solid #f4f6fa;}
+  .steprow:last-child{border-bottom:none;}
+  .seqn{width:22px;height:22px;border-radius:50%;background:#eef2f8;color:#5b6b80;
+    font-size:11px;display:flex;align-items:center;justify-content:center;
+    font-family:Consolas,monospace;}
+  .ag{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:5px;
+    background:#eef3fb;color:#3d6fa8;white-space:nowrap;}
+  .ag.security{background:#eef1f6;color:#5b6b80;}
+  .ag.parser{background:#e3edfb;color:#1a52e0;}
+  .ag.dispatch{background:#e6f6ec;color:#1a7f4b;}
+  .ag.risk{background:#fdeee0;color:#b5761c;}
+  .ag.fill{background:#f3ecfb;color:#7048a8;}
+  .ag.resolve{background:#fdeaea;color:#b03131;}
+  .sdec{font-size:13px;color:#1f2d3d;font-weight:600;}
+  .srea{font-size:12px;color:#6b7a8d;margin-top:3px;line-height:1.6;}
+  .sms{font-size:11px;color:#a8b3c2;font-family:Consolas,monospace;margin-top:3px;}
+  .sdeg{display:inline-block;font-size:10.5px;padding:0 5px;border-radius:4px;
+    background:#fdeee0;color:#b5761c;margin-left:5px;}
+
+  .cf{background:#fffbf5;border:1px solid #f3ddb8;border-radius:10px;
+    padding:12px 14px;margin-bottom:14px;}
+  .cf-h{font-size:12.5px;font-weight:600;color:#b5761c;margin-bottom:8px;}
+  .cf-body{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media (max-width:640px){ .cf-body{grid-template-columns:1fr;} }
+  .cf-side{background:#fff;border:1px solid #eceff5;border-radius:8px;padding:9px 11px;}
+  .cf-side.win{border-color:#1a7f4b;box-shadow:0 0 0 1px #cdeed9 inset;}
+  .cf-side .who{font-size:11.5px;color:#8a97a8;}
+  .cf-side .val{font-size:15px;font-weight:600;color:#1f2d3d;margin:2px 0 4px;}
+  .cf-side .why{font-size:11.5px;color:#6b7a8d;line-height:1.55;}
+  .cf-rule{font-size:11.5px;color:#8a97a8;margin-top:9px;padding-top:8px;
+    border-top:1px dashed #f0e2c8;}
+  .empty{padding:26px 14px;text-align:center;color:#a8b3c2;font-size:12.5px;}
+</style>
+
+<div class="card stat col-3"><div class="ic" style="background:#e3edfb">🧩</div>
+  <div><div class="num" id="cDec">-</div><div class="lbl">派单定级</div></div></div>
+<div class="card stat col-3"><div class="ic" style="background:#e6f6ec">👁️</div>
+  <div><div class="num" id="cRev">-</div><div class="lbl">复核表态</div></div></div>
+<div class="card stat col-3"><div class="ic" style="background:#fdeee0">⬆️</div>
+  <div><div class="num" id="cUp">-</div><div class="lbl">复核提级</div></div></div>
+<div class="card stat col-3"><div class="ic" style="background:#fdeaea">⏱️</div>
+  <div><div class="num" id="cSaved">-</div><div class="lbl">累计压缩（小时）</div></div></div>
+
+<div class="col-12">
+  <div class="tc-note">
+    <b>这里看的是"系统内部怎么想的"。</b>
+    派单Agent 按规范词表定级，风险复核Agent 看这户报过几次、原文有没有安全隐患词；
+    两边不一致时按<b>更严者胜</b>裁定——合规要求只能加严，不能放宽。
+    <span id="statNote" style="color:#8a97a8"></span><br>
+    <span style="color:#8a97a8">「累计压缩」是响应窗口被压掉的量，<b>不是</b>省下的人力工时：
+      一张单从 72 小时压到 4 小时，压力上升、工时不变。这个数越大，说明历史问题越集中。</span>
+  </div>
+</div>
+
+<div class="col-12">
+  <div class="tc-wrap">
+    <div class="card">
+      <div class="card-h"><h2>🗂️ 最近的运行</h2></div>
+      <div id="runList"><div class="empty">加载中…</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h2 id="traceTitle">🔍 选择左边一条运行</h2>
+        <span class="hint" id="traceHint">每一步都带结论、依据和耗时</span></div>
+      <div id="traceBody"><div class="empty">还没选。点左边任意一条运行查看内部过程。</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var STAT = null;
+
+function badge(agent) {
+  var nm = {security:'安全 Agent', parser:'拆解 Agent', dispatch:'派单 Agent',
+            risk:'风险复核', fill:'填报 Agent', resolve:'消解'}[agent] || (agent || '未知');
+  return '<span class="ag ' + esc(agent) + '">' + esc(nm) + '</span>';
+}
+
+function renderStats(d) {
+  STAT = d;
+  document.getElementById('cDec').textContent = d.decisions;
+  document.getElementById('cRev').textContent = d.reviewed;
+  document.getElementById('cUp').textContent = d.upgraded;
+  document.getElementById('cSaved').textContent = d.saved_hours;
+  var rate = d.decisions ? (d.upgraded / d.decisions * 100).toFixed(1) : '0.0';
+  document.getElementById('statNote').textContent =
+    '近 ' + d.days + ' 天：' + d.decisions + ' 张单派出去，复核表态 ' + d.reviewed +
+    ' 张，提级 ' + d.upgraded + ' 张（' + rate + '%）。';
+}
+
+function renderRuns(d) {
+  var el = document.getElementById('runList');
+  if (!d.items || !d.items.length) {
+    el.innerHTML = '<div class="empty">还没有轨迹记录。<br>去「首录台」提交一条诉求就会生成。</div>';
+    return;
+  }
+  el.innerHTML = d.items.map(function (x) {
+    var bg = x.upgraded ? '<span class="rbadge warn">已提级</span>'
+                        : '<span class="rbadge">' + x.steps + ' 步</span>';
+    return '<div class="run" data-run="' + esc(x.run_id) + '">' + bg +
+      '<div class="rid">' + esc(x.run_id) + '</div>' +
+      '<div class="rmeta">' + esc(x.at) + ' · ' + esc((x.agents || []).join('/')) +
+      (x.orders && x.orders.length ? ' · ' + esc(x.orders[0]) : '') +
+      (x.degraded ? ' · <span style="color:#b5761c">已降级</span>' : '') +
+      '</div></div>';
+  }).join('');
+  Array.prototype.forEach.call(el.querySelectorAll('.run'), function (n) {
+    n.onclick = function () {
+      Array.prototype.forEach.call(el.querySelectorAll('.run'), function (x) {
+        x.classList.remove('on');
+      });
+      n.classList.add('on');
+      loadTrace(n.getAttribute('data-run'));
+    };
+  });
+  // 默认打开第一条，省一次点击
+  var first = el.querySelector('.run');
+  if (first) { first.classList.add('on'); loadTrace(first.getAttribute('data-run')); }
+}
+
+function renderTrace(d) {
+  document.getElementById('traceTitle').textContent = '🔍 ' + d.run_id;
+  document.getElementById('traceHint').textContent =
+    d.at + ' · ' + d.summary.steps + ' 步 · 累计 ' + d.summary.elapsed_ms + ' ms' +
+    (d.summary.degraded ? ' · 有降级' : '');
+
+  var html = '';
+
+  // 冲突消解：真分歧才画。没有分歧就明说，不粉饰成"协作顺畅"
+  if (d.resolutions && d.resolutions.length) {
+    d.resolutions.forEach(function (res) {
+      html += '<div class="cf"><div class="cf-h">⚡ 同一件事有两种结论，按「更严者胜」裁定</div>' +
+        '<div class="cf-body">' + res.claims.map(function (c) {
+          return '<div class="cf-side' + (c.agent === res.winner ? ' win' : '') + '">' +
+            '<div class="who">' + badge(c.agent) +
+            (c.agent === res.winner ? ' <span style="color:#1a7f4b">← 采纳</span>' : '') + '</div>' +
+            '<div class="val">' + esc(c.value) + '</div>' +
+            '<div class="why">' + esc(c.reason || '（未写依据）') + '</div></div>';
+        }).join('') + '</div>' +
+        '<div class="cf-rule">规则：合规要求只能加严不能放宽 —— ' +
+        '两张宽松结论压不过一张「这户已经报过三次」。</div></div>';
+    });
+  } else {
+    html += '<div class="tc-note" style="margin-bottom:14px;background:#f7f9fc;border-color:#e9eef6">' +
+      '本次复核<b>没有异议</b>：风险复核Agent 弃权或与派单结论一致。' +
+      '没有冲突就不产生消解记录 —— 把"意见一致"画成"裁定过一次"是伪造协作。</div>';
+  }
+
+  html += d.steps.map(function (s) {
+    return '<div class="steprow">' +
+      '<div class="seqn">' + s.seq + '</div>' +
+      '<div>' + badge(s.agent) + '</div>' +
+      '<div><div class="sdec">' + esc(s.decision || s.action) +
+        (s.degraded ? '<span class="sdeg">降级</span>' : '') + '</div>' +
+      (s.reason ? '<div class="srea">' + esc(s.reason) + '</div>' : '') +
+      '<div class="sms">' + esc(s.at) + ' · ' + s.took_ms + ' ms' +
+      (s.order_no ? ' · ' + esc(s.order_no) : '') + '</div></div></div>';
+  }).join('');
+
+  document.getElementById('traceBody').innerHTML = html;
+}
+
+function loadStats() {
+  api('/api/collab/stats').then(function (r) { renderStats(r.data); })
+    .fail(function (e) { toast(e.message || '统计加载失败', 'err'); });
+}
+
+function loadRuns() {
+  api('/api/collab/runs?limit=40').then(function (r) { renderRuns(r.data); })
+    .fail(function (e) {
+      toast(e.message || '运行列表加载失败', 'err');
+      document.getElementById('runList').innerHTML =
+        '<div class="empty">加载失败。' + esc(e.message || '') + '</div>';
+    });
+}
+
+function loadTrace(runId) {
+  document.getElementById('traceBody').innerHTML = '<div class="empty">加载中…</div>';
+  api('/api/collab/trace?run_id=' + encodeURIComponent(runId)).then(function (r) {
+    renderTrace(r.data);
+  }).fail(function (e) {
+    document.getElementById('traceBody').innerHTML =
+      '<div class="empty">' + esc(e.message || '轨迹加载失败') + '</div>';
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  loadStats();
+  loadRuns();
+});
+</script>
+{% endblock %}

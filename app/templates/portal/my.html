@@ -1,0 +1,32 @@
+{% extends "portal/base.html" %}
+{% block title %}我的反映 · 幸福里居民服务{% endblock %}
+{% block sub %}本机提交过的记录{% endblock %}
+{% block body %}
+
+<div class="p-card">
+  <h2><span class="bar"></span>我的反映</h2>
+  {% if tickets %}
+  <div class="p-list">
+    {% for t in tickets %}
+    <a class="p-item" href="{{ url_for('portalviews.ticket', tid=t.id) }}">
+      <div class="top">
+        <span class="ttl">{{ t.raw_text[:24] }}{% if t.raw_text|length > 24 %}…{% endif %}</span>
+        <span class="tag tag-{{ t.status }}">{{ {'open':'已受理','doing':'处理中','done':'已办结'}.get(t.status, '已受理') }}</span>
+      </div>
+      <div class="meta">{{ t.created_at.strftime('%Y-%m-%d %H:%M') }} · 查询码 <b>{{ t.code }}</b> · {{ t.line_summary or '已登记' }}</div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="p-muted">本机还没有提交记录。</p>
+  <a class="p-btn-line" style="margin-top:10px" href="{{ url_for('portalviews.report') }}">去反映问题</a>
+  {% endif %}
+</div>
+
+<div class="p-card">
+  <h2><span class="bar"></span>换设备了？</h2>
+  <p class="p-muted">凭手机号 + 6 位查询码在任何设备上都能查到进度。</p>
+  <a class="p-btn-line" style="margin-top:10px" href="{{ url_for('portalviews.query') }}">用查询码查询</a>
+</div>
+
+{% endblock %}

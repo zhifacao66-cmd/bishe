@@ -1,0 +1,59 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ notice.title }} · 幸福里居民服务{% endblock %}
+{% block sub %}{{ notice.issuer }}{% endblock %}
+{% block head %}
+<style>
+.doc-head { border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 14px; }
+.doc-head h1 { font-size: 19px; line-height: 1.5; margin: 0 0 8px; }
+.doc-meta { font-size: 12px; color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.doc-body { font-size: 15px; line-height: 1.9; color: var(--ink); }
+.doc-body p { margin: 0 0 12px; text-indent: 2em; }
+.doc-body h2, .doc-body h3, .doc-body h4 { font-size: 15px; margin: 16px 0 8px; }
+.doc-body ul, .doc-body ol { padding-left: 22px; margin: 0 0 12px; }
+.doc-body li { margin-bottom: 4px; }
+.doc-body blockquote { margin: 0 0 12px; padding: 10px 12px; background: #f7f9fc; border-left: 3px solid var(--brand); color: var(--ink-2); font-size: 14px; }
+.notice-table { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 13px; }
+.notice-table th, .notice-table td { border: 1px solid var(--line); padding: 7px 9px; text-align: left; }
+.notice-table th:first-child, .notice-table td:first-child { white-space: nowrap; }
+.notice-table th { background: #f7f9fc; font-weight: 600; }
+.sign { margin-top: 22px; text-align: right; font-size: 14px; color: var(--ink-2); line-height: 1.9; }
+.out-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--line); }
+.out-bar .p-btn-line { flex: 1; text-align: center; }
+.out-bar .primary { background: var(--brand); color: #fff; }
+</style>
+{% endblock %}
+{% block body %}
+
+<div class="p-card">
+  <div class="doc-head">
+    <h1>{{ notice.title }}</h1>
+    <div class="doc-meta">
+      {% if notice.issuer %}<span>发文单位：{{ notice.issuer }}</span>{% endif %}
+      {% if notice.doc_no %}<span>文号：{{ notice.doc_no }}</span>{% endif %}
+      {% if notice.issued_at %}<span>成文日期：{{ notice.issued_at.strftime('%Y-%m-%d') }}</span>{% endif %}
+      {% if notice.published_at %}<span>发布：{{ notice.published_at.strftime('%Y-%m-%d') }}</span>{% endif %}
+    </div>
+  </div>
+
+  <div class="doc-body">{{ body|safe }}</div>
+
+  {% if notice.issuer %}
+  <div class="sign">
+    <div>{{ notice.issuer }}</div>
+    <div>{{ notice.issued_at.strftime('%Y年%m月%d日') if notice.issued_at else '' }}</div>
+  </div>
+  {% endif %}
+
+  <div class="out-bar">
+    <a class="p-btn-line primary" href="{{ url_for('portalviews.notice', nid=notice.id, mode='official') }}">发布版</a>
+    <a class="p-btn-line" href="{{ url_for('portalviews.notice', nid=notice.id, mode='print') }}">打印版</a>
+  </div>
+  <p class="p-muted" style="margin:10px 0 0">
+    发布版按公文版式排版（红头、文号、落款），适合对外张贴或上报；
+    打印版为普通 A4 版式，适合直接打印留存。
+  </p>
+</div>
+
+<a class="p-btn-line" href="{{ url_for('portalviews.notices') }}">← 返回公告列表</a>
+
+{% endblock %}

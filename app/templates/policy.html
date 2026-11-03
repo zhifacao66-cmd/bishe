@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}访问策略 · 极简减负平台{% endblock %}
+{% block page_title %}访问策略（ABAC）{% endblock %}
+{% block page_sub %}RBAC 管「能不能进这个功能」，ABAC 管「进来之后能看哪几条」{% endblock %}
+
+{% block content %}
+
+<div class="card col-12">
+  <div class="card-h">
+    <h2>🧭 两层是怎么分工的</h2>
+  </div>
+  <div style="padding:4px 18px 18px;line-height:1.9;font-size:14px">
+    <p style="margin:0 0 8px">
+      <b>第一层 RBAC</b>：<code>auth.PERMS</code> 的 23 个权限点，决定
+      「有没有资格进这个页面 / 调这个接口」。它管不到行——有 <code>order.view</code>
+      的两个人，一个是社区、一个是物业，能看到的工单根本不是同一批。
+    </p>
+    <p style="margin:0 0 8px">
+      <b>第二层 ABAC</b>：本页展示的规则表，用<b>主体属性</b>（角色、单位、账号状态）+
+      <b>资源属性</b>（密级、可见范围、归属单位、发布状态）+
+      <b>动作</b>（读 / 列表 / 导出 / 修改 / 裁决）算一次决策，决定这一条能不能看。
+    </p>
+    <p style="margin:0;color:var(--muted);font-size:13px">
+      说「用 ABAC 替代 RBAC」是不成立的：权限点管不住列表里哪几行该隐藏，
+      属性规则也管不住有没有资格进页面。两层并存，缺一层都漏。
+    </p>
+  </div>
+</div>
+
+<div class="card col-6">
+  <div class="card-h"><h2>📋 规则表</h2><span class="hint">先命中先生效</span></div>
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:64px">编号</th><th style="width:130px">规则</th><th>说明</th></tr></thead>
+      <tbody id="ruleBody">
+        <tr><td colspan="3" style="text-align:center;color:var(--muted)">加载中…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card col-6">
+  <div class="card-h"><h2>🔐 角色可见密级上限</h2></div>
+  <div class="tw">
+    <table>
+      <thead><tr><th>角色</th><th style="width:120px">上限</th><th style="width:110px">数值</th></tr></thead>
+      <tbody id="ceilBody">
+        <tr><td colspan="3" style="text-align:center;color:var(--muted)">加载中…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="hint" style="padding:10px 18px 16px;font-size:12px;color:var(--muted)">
+    密级空串按「内部」处理——未标不等于公开，把"忘了标"当公开等于让它对全网可见。
+  </div>
+</div>
+
+<div class="card col-12">
+  <div class="card-h">
+    <h2>🧪 决策试算</h2>
+    <span class="hint">只读：不查库、不写审计、不改任何数据</span>
+  </div>
+  <div class="frow" style="padding:0 18px 14px">
+    <div class="field"><label>角色</label><select id="fRole" class="inp"></select></div>
+    <div class="field"><label>动作</label><select id="fAction" class="inp"></select></div>
+    <div class="field"><label>资源类型</label><select id="fKind" class="inp"></select></div>
+    <div class="field"><label>密级</label><select id="fSecret" class="inp"></select></div>
+    <div class="field"><label>通道</label><select id="fChannel" class="inp"></select></div>
+    <div class="field"><label>可见范围</label>
+      <select id="fScope" class="inp">
+        <option value="all">all（全体）</option>
+        <option value="community">community（社区内部）</option>
+        <option value="property">property（物业）</option>
+      </select>
+    </div>
+    <div class="field"><label>账号状态</label>
+      <select id="fStatus" class="inp">
+        <option value="active">active（正常）</option>
+        <option value="disabled">disabled（停用）</option>
+      </select>
+    </div>
+    <div class="field"><label>我的单位</label><input id="fOrg" class="inp" placeholder="如 幸福社区"></div>
+    <div class="field"><label>资源归属单位</label><input id="fOwner" class="inp" placeholder="留空 = 不按单位收窄"></div>
+  </div>
+  <div style="padding:0 18px 18px">
+    <button class="btn btn-primary" id="btnSim" onclick="simulate()">试算</button>
+    <div id="simOut" style="margin-top:14px"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* 试算结果直接展示规则编号与原因——这才是 ABAC 的价值：
+   不是"拒了"，而是"被 R4 挡住，因为你的角色上限是「内部」"。 */
+
+function fieldOpts(sel, items, keep) {
+  sel.innerHTML = items.map(function (it) {
+    return '<option value="' + esc(it.value) + '">' + esc(it.label) + '</option>';
+  }).join('');
+  if (keep != null) { sel.value = keep; }
+}
+
+function showErr(msg) {
+  document.getElementById('simOut').innerHTML =
+    '<div style="border-left:4px solid #b03131;padding:10px 14px;color:#b03131">' +
+    esc(msg) + '</div>';
+}
+
+async function loadMeta() {
+  try {
+    var j = await api('/api/policy');
+    if (j.code !== 0) { showErr((j.data && j.data.msg) || j.msg || '规则加载失败'); return; }
+    var d = j.data || {};
+    document.getElementById('ruleBody').innerHTML = (d.rules || []).map(function (x) {
+      return '<tr><td><b>' + esc(x.code) + '</b></td><td>' + esc(x.name) +
+             '</td><td style="font-size:13px;color:var(--muted)">' + esc(x.desc) + '</td></tr>';
+    }).join('');
+    document.getElementById('ceilBody').innerHTML = (d.roles || []).map(function (x) {
+      return '<tr><td>' + esc(x.role) + '</td><td><b>' + esc(x.ceiling_label) +
+             '</b></td><td>' + esc(x.ceiling) + '</td></tr>';
+    }).join('');
+    fieldOpts(document.getElementById('fRole'), (d.roles || []).map(function (x) {
+      return { value: x.role, label: x.role + '（上限 ' + x.ceiling_label + '）' };
+    }), 'property');
+    fieldOpts(document.getElementById('fAction'), d.actions || [], 'read');
+    fieldOpts(document.getElementById('fKind'), d.kinds || [], 'doc');
+    fieldOpts(document.getElementById('fSecret'), d.secrets || [], '3');
+    fieldOpts(document.getElementById('fChannel'), d.channels || [], 'internal');
+  } catch (e) {
+    showErr(e.message || '规则加载失败');
+  }
+}
+
+async function simulate() {
+  var body = {
+    role: document.getElementById('fRole').value,
+    action: document.getElementById('fAction').value,
+    kind: document.getElementById('fKind').value,
+    secret: parseInt(document.getElementById('fSecret').value, 10),
+    channel: document.getElementById('fChannel').value,
+    scope: document.getElementById('fScope').value,
+    status: document.getElementById('fStatus').value,
+    org: document.getElementById('fOrg').value.trim(),
+    owner_org: document.getElementById('fOwner').value.trim()
+  };
+  try {
+    var j = await api('/api/policy/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (j.code !== 0) { showErr((j.data && j.data.msg) || j.msg || '试算失败'); return; }
+    var d = j.data || {};
+    var col = d.allow ? '#1a7f4b' : '#b03131';
+    var tags = [];
+    if (d.watermark) { tags.push('强制水印'); }
+    if (d.log) { tags.push('写审计'); }
+    if (d.mask) { tags.push('字段脱敏'); }
+    document.getElementById('simOut').innerHTML =
+      '<div style="border-left:4px solid ' + col + ';padding:10px 14px;background:rgba(0,0,0,.02)">' +
+      '<div style="font-size:15px;font-weight:700;color:' + col + '">' +
+      (d.allow ? '允许' : '拒绝') +
+      '　<span style="font-weight:400;font-size:13px;color:var(--muted)">命中 ' + esc(d.rule) + '</span></div>' +
+      '<div style="margin-top:6px;font-size:13px">' + esc(d.reason || '') + '</div>' +
+      (tags.length ? '<div style="margin-top:8px;font-size:12px;color:var(--muted)">附加动作：' +
+        esc(tags.join(' · ')) + '</div>' : '') +
+      '</div>';
+  } catch (e) {
+    showErr(e.message || '试算失败');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadMeta);
+</script>
+{% endblock %}

@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#206bc4">
+<meta name="format-detection" content="telephone=no">
+<!-- 内联 SVG 图标：不额外落一个文件，也不用再让浏览器为 /favicon.ico 吃一个 404 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23206bc4'/%3E%3Ctext x='32' y='45' font-size='34' text-anchor='middle' fill='%23fff' font-family='sans-serif'%3E%E7%A4%BE%3C/text%3E%3C/svg%3E">
+<title>{% block title %}极简减负平台{% endblock %}</title>
+<link rel="stylesheet" href="{{ asset('css/style.css') }}">
+<script>
+/* ---------- HTML 转义：innerHTML 插值**一律**先过它 ----------
+   页面里 40 多处用 `el.innerHTML = 模板串` 渲染接口数据，只要有一个字段
+   没转义，就等于把"用户填的内容"当 HTML 执行。这里必须有全局兜底：
+   注册姓名、FDE 原文、公文标题、台账反馈都是外部输入，谁都能写尖括号。 */
+window.esc = function (v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function (ch) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+  });
+};
+
+/* ---------- 会话失效与越权统一处理 + 站内预取 ---------- */
+(function () {
+  var raw = window.fetch.bind(window);
+
+  /* 预取缓存：悬停侧边栏时把目标页的接口数据先取回来，存 sessionStorage。
+     为什么不用浏览器 HTTP 缓存：接口响应是 no-store（提交后必须拿到新数据），
+     所以只能自己存一份内存副本，并且**一次性消费**，避免陈旧数据反复命中。 */
+  var PF_TTL = 8000;
+  function takePrefetch(url) {
+    try {
+      var k = '__pf:' + url, s = sessionStorage.getItem(k);
+      if (!s) return null;
+      sessionStorage.removeItem(k);
+      var o = JSON.parse(s);
+      if (Date.now() - o.t > PF_TTL) return null;
+      return new Response(o.body, {
+        status: o.s || 200,
+        headers: { 'Content-Type': o.ct || 'application/json' }
+      });
+    } catch (e) { return null; }
+  }
+  function clearPrefetch() {
+    try {
+      for (var i = sessionStorage.length - 1; i >= 0; i--) {
+        var k = sessionStorage.key(i);
+        if (k && k.indexOf('__pf:') === 0) sessionStorage.removeItem(k);
+      }
+    } catch (e) { /* 隐私模式下 sessionStorage 可能不可用，忽略 */ }
+  }
+
+  window.fetch = function (url, opts) {
+    var method = ((opts && opts.method) || 'GET').toUpperCase();
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+
+    if (method === 'GET') {
+      var hit = takePrefetch(u);
+      if (hit) return Promise.resolve(hit);
+    }
+
+    var p = raw(url, opts);
+    // 任何写操作之后，预取副本一律作废——否则提交完列表还是旧的那一屏
+    if (method !== 'GET') p.then(clearPrefetch, clearPrefetch);
+
+    return p.then(function (r) {
+      if (r.status === 401) {
+        location.href = '/login?next=' + encodeURIComponent(location.pathname);
+        return new Promise(function () {});
+      }
+      if (r.status === 403) {
+        r.clone().json().then(function (j) { alert(j.msg || '无权限执行该操作'); })
+          .catch(function () { alert('无权限执行该操作'); });
+        return new Promise(function () {});
+      }
+      return r;
+    });
+  };
+
+  /* ---------- 预取：悬停即开始，点击时已经好了 ---------- */
+  // 每个页面的首屏接口。切页慢的第二段就是"骨架出来了还要等这个 XHR"，
+  // 把它提前到悬停时刻，点击后页面脚本的 fetch 直接命中上面的缓存。
+  var PAGE_API = {
+    '/': ['/api/fde/stats'],
+    '/tasks': ['/api/tasks'],
+    '/orders': ['/api/orders'],
+    '/ledgers': ['/api/ledgers', '/api/ledgers/lines'],
+    '/notices': ['/api/notices'],
+    '/reports': ['/api/reports'],
+    '/kb': ['/api/kb/stats', '/api/kb/docs'],
+    '/audit': ['/api/audit', '/api/audit/agents'],
+    '/system': ['/api/health']
+  };
+  var warmed = {};   // path -> 上次预取时刻
+
+  function normalize(a) {
+    try {
+      var u = new URL(a.href, location.href);
+      if (u.origin !== location.origin) return null;
+      var p = u.pathname;
+      if (p === location.pathname && !u.search) return null;   // 当前页不必预取
+      return { path: p, href: u.href };
+    } catch (e) { return null; }
+  }
+
+  function warm(a) {
+    var t = normalize(a);
+    if (!t) return;
+    // 15 秒内不重复预取：既挡住鼠标划过一串链接时的抖动请求，
+    // 又能在缓存/副本过期（HTML 60s、接口副本 8s）之前补上。
+    var ts = warmed[t.path] || 0;
+    if (Date.now() - ts < 15000) return;
+    warmed[t.path] = Date.now();
+
+    // 1) 预取 HTML 骨架（服务端给了 private, max-age=20，点击时直接命中磁盘缓存）
+    var lk = document.createElement('link');
+    lk.rel = 'prefetch'; lk.href = t.href; lk.as = 'document';
+    document.head.appendChild(lk);
+
+    // 2) 预取该页首屏接口
+    var apis = PAGE_API[t.path] || [];
+    apis.forEach(function (api) {
+      raw(api, { credentials: 'same-origin' }).then(function (r) {
+        if (!r.ok) return;
+        return r.text().then(function (body) {
+          sessionStorage.setItem('__pf:' + api, JSON.stringify({
+            t: Date.now(), s: r.status,
+            ct: r.headers.get('Content-Type') || 'application/json',
+            body: body
+          }));
+        });
+      }).catch(function () {});
+    });
+  }
+
+  // 事件委托：鼠标移上去、手指按下、键盘 Tab 聚焦，三种意图都算
+  ['mouseover', 'touchstart', 'focusin'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      var el = e.target;
+      while (el && el.tagName !== 'A') el = el.parentElement;
+      if (!el || el.target === '_blank' || el.hasAttribute('download')) return;
+      var href = el.getAttribute('href') || '';
+      if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0) return;
+      warm(el);
+    }, { passive: true, capture: true });
+  });
+})();
+</script>
+
+<script>
+/* ---------- 统一请求入口 api()：超时、解析、报错只写一处 ----------
+   页面里原来有 30 多处各自写 `await (await fetch(u)).json()`，三个问题：
+
+   ① 连不上时页面**静默卡死**。网关 502 回的是 HTML，`r.json()` 抛
+      "Unexpected token <"，控制台一行红字，表格永远停在"加载中…"。
+      用户看到的不是"网络出问题了"，而是"这系统坏了"——演示现场最怕这个。
+   ② 没有超时。隧道抖动时请求能挂几分钟，按钮一直"提交中…"，
+      用户只能刷新，而刷新又可能重复提交。本项目远程通道 TLS 冷启动实测
+      要 9~26 秒，没有超时等于没有上限。
+   ③ 11 个页面一个 catch 都没有。失败没有任何人去处理。
+
+   所以收口到这里：
+   · 返回值就是**已解析好的** `{code,msg,data}`，调用点仍然写
+     `if (j.code !== 0)`，业务错误照旧由调用者决定怎么弹——语义完全不变；
+   · 只有"连不上 / 超时 / 回的不是 JSON"才抛异常，并且**先弹提示条再抛**：
+     调用者接不接这个异常，用户都能看见发生了什么。
+
+   注意 401/403 已在上面被 fetch 拦掉（跳登录 / 弹无权限），不会走到这里。 */
+(function () {
+  var DEFAULT_T = 60000;   // 默认 60 秒：模型问答单次可到 30 秒以上，留足余量
+  var bar = null;
+
+  function buildBar() {
+    var el = document.createElement('div');
+    el.className = 'netbar';
+    el.setAttribute('role', 'alert');
+    el.innerHTML = '<span class="dot bad"></span>'
+      + '<span class="netbar-t"></span>'
+      + '<button type="button" class="netbar-retry">重试</button>'
+      + '<button type="button" class="netbar-x" aria-label="关闭提示">×</button>';
+    el.querySelector('.netbar-retry').addEventListener('click', function () {
+      location.reload();
+    });
+    el.querySelector('.netbar-x').addEventListener('click', hideNet);
+    document.body.appendChild(el);
+    return el;
+  }
+
+  /* 提示条挂在 body 上、position:fixed：不能放进 .content，
+     那里是 12 栏 grid，插一个非卡片元素会占掉一列并挤走所有卡片。 */
+  function netBar(msg, kind) {
+    try {
+      if (!bar) bar = buildBar();
+      bar.querySelector('.netbar-t').textContent = msg;
+      bar.dataset.kind = kind || 'network';
+      bar.classList.add('show');
+    } catch (e) { /* DOM 还没就绪时忽略，别让提示条自身把请求搞挂 */ }
+  }
+  function hideNet() { if (bar) bar.classList.remove('show'); }
+  window.hideNet = hideNet;
+
+  window.api = function (url, opts) {
+    opts = Object.assign({}, opts || {});
+    var timeout = opts.timeout || DEFAULT_T;
+    delete opts.timeout;
+
+    var tm = null;
+    if (!opts.signal && typeof AbortController !== 'undefined') {
+      var ac = new AbortController();
+      opts.signal = ac.signal;
+      tm = setTimeout(function () { ac.abort(); }, timeout);
+    }
+    function stop() { if (tm) { clearTimeout(tm); tm = null; } }
+    function boom(kind, msg) {
+      stop();
+      var e = new Error(msg);
+      e.kind = kind; e.url = url;
+      netBar(msg, kind);
+      throw e;
+    }
+
+    return fetch(url, opts).then(function (r) {
+      stop();
+      var ct = (r.headers.get('Content-Type') || '').toLowerCase();
+      if (ct.indexOf('json') < 0) {
+        // 反代/网关的错误页是 HTML —— 这里必须自己判，否则 r.json()
+        // 抛出的 SyntaxError 会被当成"代码 bug"，掩盖真实原因（502/504）
+        boom('http', '服务暂时不可用（HTTP ' + r.status + '）');
+      }
+      return r.json().then(function (j) {
+        if (j && j.code === 0) hideNet();   // 恢复后提示条自己消失，不用手动关
+        return j;
+      }, function () {
+        boom('parse', '服务返回的数据无法解析');
+      });
+    }, function (err) {
+      if (err && (err.name === 'AbortError' || err.code === 20)) {
+        boom('timeout', '请求超时（' + Math.round(timeout / 1000) + ' 秒未响应）');
+      }
+      boom('network', '网络连接失败，请检查网络后重试');
+    });
+  };
+})();
+</script>
+{% if wm_css %}
+<!-- 平铺水印：内部账号的每一页都带"姓名·单位·日期"。
+     截屏外流后这是唯一还能追到人的线索；pointer-events:none 保证不挡操作。 -->
+<style>{{ wm_css }}</style>
+{% endif %}
+</head>
+<body>
+
+<!-- 手机上侧栏是抽屉：这条遮罩同时承担"点外面关掉"和"压住背景"两件事 -->
+<div class="side-mask" id="sideMask" hidden></div>
+
+<aside class="sidebar" id="sidebar" aria-label="主导航">
+  <div class="brand">
+    <div class="brand-logo">🏘️</div>
+    <div><b>极简减负平台</b><small>Community Agent System</small></div>
+  </div>
+  <nav class="nav">
+    <div class="nav-label">业务</div>
+    {% if can('fde.create') %}
+    <a href="{{ url_for('views.index') }}" class="{{ 'active' if request.endpoint=='views.index' }}"><span class="ico">📝</span>FDE 首录台</a>
+    {% endif %}
+    {% if can('fde.view') %}
+    {# 紧挨着首录台：轨迹就是"我刚提交的那条诉求，系统内部怎么处理的"，
+       放在监督类入口（流程监控/风险预警）下面会让人以为它也是看别人的 #}
+    <a href="{{ url_for('views.trace_page') }}" class="{{ 'active' if request.endpoint=='views.trace_page' }}"><span class="ico">🧩</span>协作轨迹</a>
+    {% endif %}
+    {% if can('task.view') %}
+    <a href="{{ url_for('views.tasks') }}" class="{{ 'active' if request.endpoint=='views.tasks' }}"><span class="ico">📋</span>任务看板</a>
+    {% endif %}
+    {% if can('person.view') %}
+    {# 底册放在任务看板之后、公告之前：它是"做事前的背景资料"，
+       既不是日常办理入口（首录台），也不是监督视角（流程监控），
+       而是社区/街道在派单、上门、报表时会翻的那本册子 #}
+    <a href="{{ url_for('views.persons_page') }}" class="{{ 'active' if request.endpoint=='views.persons_page' }}"><span class="ico">👥</span>人员底册</a>
+    {% endif %}
+    {% if can('order.view') %}
+    <a href="{{ url_for('views.orders') }}" class="{{ 'active' if request.endpoint=='views.orders' }}"><span class="ico">📤</span>物业工单</a>
+    {# 三个入口分开：工单是"办事"、监控是"看流程"、预警是"找最坏的那几件"。
+       合成一个页面会让人在办单时被迫看图表，在看图表时又想下去办单。 #}
+    <a href="{{ url_for('views.process_page') }}" class="{{ 'active' if request.endpoint=='views.process_page' }}"><span class="ico">⏱️</span>流程监控</a>
+    <a href="{{ url_for('views.risk_page') }}" class="{{ 'active' if request.endpoint=='views.risk_page' }}"><span class="ico">🎯</span>风险预警</a>
+    {% endif %}
+    {% if can('ledger.view') %}
+    <a href="{{ url_for('views.ledgers') }}" class="{{ 'active' if request.endpoint=='views.ledgers' }}"><span class="ico">🗂️</span>台账中心</a>
+    {% endif %}
+    {% if can('kb.view') %}
+    <a href="{{ url_for('views.kb') }}" class="{{ 'active' if request.endpoint=='views.kb' }}"><span class="ico">📚</span>知识库</a>
+    {% endif %}
+    {% if can('notice.view') %}
+    <a href="{{ url_for('views.notices') }}" class="{{ 'active' if request.endpoint in ('views.notices','views.notice_detail') }}"><span class="ico">📢</span>通知公告</a>
+    {% endif %}
+    {% if can('doc.view') %}
+    <a href="{{ url_for('views.docs') }}" class="{{ 'active' if request.endpoint in ('views.docs','views.doc_detail') }}"><span class="ico">📄</span>发文台</a>
+    {% endif %}
+    {% if can('weekly.view') %}
+    <a href="{{ url_for('views.weekly') }}" class="{{ 'active' if request.endpoint in ('views.weekly','views.weekly_detail') }}"><span class="ico">📅</span>工作周报</a>
+    {% endif %}
+    {% if can('report.view') or can('audit.view') or can('user.manage') %}
+    <div class="nav-label">管理</div>
+    {% endif %}
+    {% if can('report.view') %}
+    <a href="{{ url_for('views.reports') }}" class="{{ 'active' if request.endpoint=='views.reports' }}"><span class="ico">📊</span>报表中心</a>
+    {% endif %}
+    {% if can('audit.view') %}
+    <a href="{{ url_for('views.audit') }}" class="{{ 'active' if request.endpoint=='views.audit' }}"><span class="ico">🔐</span>审计日志</a>
+    <a href="{{ url_for('views.policy') }}" class="{{ 'active' if request.endpoint=='views.policy' }}"><span class="ico">🛡️</span>访问策略</a>
+    {% endif %}
+    {% if can('user.manage') %}
+    <a href="{{ url_for('admin.users') }}" class="{{ 'active' if request.endpoint in ('admin.users','admin.user_detail') }}"><span class="ico">👥</span>用户与权限</a>
+    <a href="{{ url_for('views.system') }}" class="{{ 'active' if request.endpoint=='views.system' }}"><span class="ico">🛰️</span>系统状态</a>
+    {% endif %}
+  </nav>
+  {% set lb = llm_badge() %}
+  <div class="side-foot" id="llmBadge" data-state="{{ lb.state }}" title="{{ lb.tip }}">
+    <span class="dot {{ lb.state }}"></span><span id="llmBadgeTitle">{{ lb.title }}</span><br>
+    <span id="llmBadgeSub">{{ lb.sub }}</span>
+    {% if can('user.manage') %}<a class="side-foot-more" href="{{ url_for('views.system') }}">查看状态详情 →</a>{% endif %}
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <button class="navtoggle" id="navToggle" type="button"
+            aria-label="打开菜单" aria-controls="sidebar" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="topbar-t">
+      <h1>{% block page_title %}工作台{% endblock %}</h1>
+      <div class="sub">{% block page_sub %}{% endblock %}</div>
+    </div>
+    <div class="topbar-r">
+      <span class="chip">🛡️ 保密模式已开启</span>
+      <div class="userbox">
+        <div class="avatar">{{ current_user.name[:1] }}</div>
+        <div class="uinfo">
+          <b>{{ current_user.name }}{% if current_user.name != role_name(current_user.role) %}<span class="role-chip r-{{ current_user.role }}">{{ role_name(current_user.role) }}</span>{% endif %}</b>
+          <small>{{ current_user.org }}</small>
+        </div>
+        <form method="post" action="{{ url_for('views.logout') }}"><button class="logout" title="退出登录">退出</button></form>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+{% block scripts %}{% endblock %}
+
+<script>
+/* ---------- 手机侧栏抽屉 ----------
+   桌面布局是 body{display:flex} + 230px 固定侧栏，手机上会把正文压到
+   150px 宽（比一个汉字表还窄）。窄屏下侧栏改成覆盖式抽屉，正文吃满宽度。
+
+   这里只切一个 body 上的 class，具体位移交给 CSS —— 免得 JS 里算尺寸，
+   旋转屏幕/改浏览器字号时算出来的值会瞬间失配。 */
+(function () {
+  var body = document.body;
+  var btn = document.getElementById('navToggle');
+  var mask = document.getElementById('sideMask');
+  var side = document.getElementById('sidebar');
+  if (!btn || !mask || !side) return;
+
+  function setOpen(open) {
+    body.classList.toggle('nav-open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.setAttribute('aria-label', open ? '关闭菜单' : '打开菜单');
+    mask.hidden = !open;
+  }
+
+  btn.addEventListener('click', function () {
+    setOpen(!body.classList.contains('nav-open'));
+  });
+  mask.addEventListener('click', function () { setOpen(false); });
+
+  /* 点导航就往目标页走了，先把抽屉收掉：否则从详情返回时还敞着 */
+  side.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a');
+    if (a && a.getAttribute('href')) setOpen(false);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') setOpen(false);
+  });
+
+  /* 转屏/拖宽窗口跨过断点时必须复位，不然回来是"抽屉开着但汉堡没了" */
+  window.addEventListener('resize', function () {
+    if (window.innerWidth > 900 && body.classList.contains('nav-open')) setOpen(false);
+  });
+
+  /* 浏览器后退回来可能带着 class（bfcache），按当前宽度重新对齐一次 */
+  window.addEventListener('pageshow', function () {
+    if (window.innerWidth > 900) setOpen(false);
+  });
+})();
+</script>
+
+<script>
+/* ---------- 侧栏模型状态灯：真实轮询，不再写死 ----------
+   首屏状态由服务端渲染（llm_badge()），这里只负责"挂着的时候别骗人"。
+   接口只读探活缓存，永远秒回；真正的探活在服务端后台补，慢的只是状态更新，
+   不是这次请求。 */
+(function () {
+  var box = document.getElementById('llmBadge');
+  if (!box) return;
+  var dot = box.querySelector('.dot');
+  var t = document.getElementById('llmBadgeTitle');
+  var s = document.getElementById('llmBadgeSub');
+  var last = box.dataset.state;
+  function paint(d) {
+    box.dataset.state = d.state || 'idle';
+    if (dot) dot.className = 'dot ' + (d.state || 'idle');
+    if (t) t.textContent = d.title || '模型状态未知';
+    if (s) s.textContent = d.sub || '';
+    box.title = d.tip || '';
+    /* 从"好的"掉到"坏了"才提示一次：常态轮询不该弹窗 */
+    if (last === 'ok' && d.state === 'bad' && window.console) {
+      console.warn('[模型状态] 已降级为规则路径：' + (d.detail || d.error || ''));
+    }
+    last = box.dataset.state;
+  }
+  function poll() {
+    if (document.hidden) return;          /* 后台标签页不轮询，省隧道带宽 */
+    fetch('/api/health/llm', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (j && j.data) paint(j.data); })
+      .catch(function () { /* 网络抖动不翻红，等下一轮 */ });
+  }
+  setTimeout(poll, 1500);                  /* 首屏渲染值已可信，稍后再校准 */
+  setInterval(poll, 20000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
+})();
+</script>
+</body>
+</html>

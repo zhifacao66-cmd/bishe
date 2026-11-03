@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}无访问权限 · 极简减负平台{% endblock %}
+{% block page_title %}访问受限{% endblock %}
+{% block page_sub %}{% endblock %}
+
+{% block content %}
+<div class="card col-12">
+  <div class="forbid">
+    <div class="forbid-ico">🔒</div>
+    <h2>当前账号无权访问该功能</h2>
+    <p>
+      你当前的角色是
+      <b>{{ role_name(current_user.role) }}</b>（{{ current_user.org }}），
+      而此页面需要「<b>{{ perm }}</b>」权限。
+    </p>
+    <p class="mini">本次越权尝试已写入审计日志（action=deny），供上级监督核查。</p>
+    <div class="forbid-act">
+      <a class="btn btn-primary" href="{{ url_for(ROLE_HOME.get(current_user.role, 'views.index')) }}">回到我的工作台</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

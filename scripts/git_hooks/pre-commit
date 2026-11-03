@@ -1,0 +1,47 @@
+#!/bin/sh
+# 提交前守卫：只挡"会造成长期后果"的两类问题。
+#
+# 为什么只跑 A 和 D：
+#   A 组 = 凭据是否会被提交（提交进历史就再也删不干净，只能改密码 + 重写历史）
+#   D 组 = 模板转义与统一请求入口（坏了是线上白屏/被注入，改起来分散在很多页）
+# 两项加起来不到 1 秒，不拖慢 commit。
+#
+# 权限、数据一致性、流程这些放在 python scripts/audit_all.py 里手动跑——
+# 那些每次 commit 都跑会让人开始用 --no-verify，钩子就形同虚设。
+#
+# 启用：git config core.hooksPath scripts/git_hooks
+# 绕过：git commit --no-verify（请只在你确知原因时用）
+
+cd "$(git rev-parse --show-toplevel)" 2>/dev/null || exit 0
+
+PY=""
+for c in ".venv/Scripts/python.exe" \
+         "$USERPROFILE/.workbuddy/binaries/python/envs/bise4/Scripts/python.exe" \
+         "python" "python3" "py"; do
+    if command -v "$c" >/dev/null 2>&1; then
+        PY="$c"
+        break
+    fi
+done
+
+if [ -z "$PY" ]; then
+    echo "[pre-commit] 找不到 Python，跳过凭据检查（建议先装依赖再提交）"
+    exit 0
+fi
+
+OUT=$("$PY" -X utf8 scripts/audit_all.py --only A,D --quiet 2>&1)
+RC=$?
+if [ "$RC" -ne 0 ]; then
+    echo "$OUT" | grep -E "^  (✗|!)" || echo "$OUT"
+    echo
+    echo "────────────────────────────────────────────────────────"
+    echo " 提交被拦下：上面这几项必须处理。"
+    echo " 完整原因：python scripts/audit_all.py --only A,D"
+    echo " 确认无风险要强行提交：git commit --no-verify"
+    echo "────────────────────────────────────────────────────────"
+    exit 1
+fi
+
+# 成功也说一句：静默的钩子会让人怀疑它到底有没有在跑
+echo "[pre-commit] 凭据与前端检查通过（A/D 两组）"
+exit 0

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}审计日志 · 极简减负平台{% endblock %}
+{% block page_title %}审计日志{% endblock %}
+{% block page_sub %}只追加 · 可追溯 · 所有 Agent 操作留痕{% endblock %}
+
+{% block content %}
+<div class="card stat col-3">
+  <div class="ic" style="background:#e3edfb">🔐</div>
+  <div><div class="num" id="cAll">-</div><div class="lbl">审计记录总数</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#fbe4e4">🛡️</div>
+  <div><div class="num" id="cSec">-</div><div class="lbl">保密审查记录</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#fdf0d7">⛔</div>
+  <div><div class="num" id="denyHint" style="color:#b03131">-</div><div class="lbl">越权拒绝</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#e0f5ea">🌐</div>
+  <div><div class="num">0</div><div class="lbl">外网调用次数</div></div>
+</div>
+
+<div class="card col-12">
+  <div class="card-h">
+    <h2>📜 操作留痕</h2>
+    <span class="hint" id="truncHint"></span>
+    <div id="agentFilter" style="display:flex;gap:8px;"></div>
+  </div>
+  <div class="tw">
+    <table>
+      <thead><tr>
+        <th>时间</th><th>操作者</th><th>Agent</th><th>动作</th><th>输入摘要</th><th>输出摘要</th>
+      </tr></thead>
+      <tbody id="tbody"><tr><td colspan="6" style="text-align:center;color:var(--muted)">加载中…</td></tr></tbody>
+    </table>
+  </div>
+  <div style="display:flex;justify-content:center;align-items:center;gap:12px;padding:14px 0 4px">
+    <button class="btn btn-ghost" id="btnMore" onclick="load(false)" style="display:none">加载更多</button>
+    <span class="hint" id="endHint" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const AGENT_CN = {security:'保密审查',parser:'拆解',dispatch:'派单',fill:'填报',report:'报表',supervise:'督办',work_order:'工单',auth:'权限',error:'异常',maintenance:'维护'};
+const PAGE = 100;
+let cur = '';
+let CURSOR = '';       // 游标：上一页最后一条的 (时间, id)
+let ROWS = [];         // 已经加载出来的行，翻页只追加不清空
+
+/* 游标分页而不是 offset：审计是只追加表，新记录总在最前面，
+   用 offset 翻到第二页时期间的写入会让内容整体后移，出现重复和漏读。 */
+async function load(reset){
+  if(reset){ CURSOR=''; ROWS=[]; document.getElementById('tbody').innerHTML =
+    '<tr><td colspan="6" style="text-align:center;color:var(--muted)">加载中…</td></tr>'; }
+  const qs = new URLSearchParams({limit: String(PAGE)});
+  if(cur) qs.set('agent', cur);
+  if(CURSOR) qs.set('cursor', CURSOR);
+  const j = await api('/api/audit?' + qs);
+  const list = (j.data && j.data.items) || [];
+  const c = (j.data && j.data.counts) || {};
+
+  // 三张卡是"整本审计账"的家底，不随筛选、也不随翻页变化——
+  // 筛"保密审查"时把总数改成 96，会让人以为总共只有 96 条留痕
+  document.getElementById('cAll').textContent = c.total ?? 0;
+  document.getElementById('cSec').textContent = c.security ?? 0;
+  const dh = document.getElementById('denyHint');
+  if (dh) dh.textContent = c.deny ?? 0;
+
+  CURSOR = c.next_cursor || '';
+  ROWS = ROWS.concat(list);
+  render();
+
+  document.getElementById('truncHint').textContent =
+    cur ? `当前筛选 ${c.matched ?? ROWS.length} 条` : `共 ${c.total ?? ROWS.length} 条`;
+  const more = document.getElementById('btnMore');
+  const end = document.getElementById('endHint');
+  more.style.display = CURSOR ? '' : 'none';
+  end.textContent = CURSOR ? `已显示最近 ${ROWS.length} 条` : (ROWS.length ? '已全部加载' : '');
+}
+
+function render(){
+  const tb = document.getElementById('tbody');
+  if(!ROWS.length){ tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted)">暂无记录</td></tr>'; return; }
+  tb.innerHTML = ROWS.map(l=>`<tr>
+    <td style="font-family:Consolas,monospace;font-size:12px;color:var(--muted)">${esc(l.created_at)}</td>
+    <td>${esc(l.actor)||'-'}</td>
+    <td><span class="badge b-blue">${esc(AGENT_CN[l.agent]||l.agent)||'-'}</span></td>
+    <td style="font-size:12px"><span class="${l.action==='deny'?'badge b-red':''}">${esc(l.action)}</span></td>
+    <td style="font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(l.input_digest)}">${esc(l.input_digest)||'-'}</td>
+    <td style="font-size:12px;color:var(--muted);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(l.output_digest)}">${esc(l.output_digest)||'-'}</td>
+  </tr>`).join('');
+}
+
+async function loadFilter(){
+  const j = await api('/api/audit/agents');
+  const mk=(v,t)=>`<button class="btn ${v===cur?'btn-primary':'btn-ghost'}" style="padding:4px 14px;font-size:12px" onclick="setA('${esc(v)}')">${esc(t)}</button>`;
+  document.getElementById('agentFilter').innerHTML = mk('','全部') + (j.data||[]).map(a=>mk(a,AGENT_CN[a]||a)).join('');
+}
+function setA(v){ cur=v; loadFilter(); load(true); }
+
+loadFilter(); load(true);
+</script>
+{% endblock %}

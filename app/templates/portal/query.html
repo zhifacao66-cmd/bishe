@@ -1,0 +1,58 @@
+{% extends "portal/base.html" %}
+{% block title %}查进度 · 幸福里居民服务{% endblock %}
+{% block sub %}手机号 + 6 位查询码{% endblock %}
+{% block body %}
+
+<div class="p-card">
+  <h2><span class="bar"></span>查询办理进度</h2>
+  <form id="f">
+    <div class="p-field">
+      <label for="phone">手机号</label>
+      <input id="phone" type="tel" inputmode="numeric" maxlength="11" placeholder="提交时填的手机号">
+    </div>
+    <div class="p-field">
+      <label for="code">查询码</label>
+      <input id="code" type="text" inputmode="numeric" maxlength="6" placeholder="6 位数字">
+    </div>
+    <div class="p-err" id="err"></div>
+    <button class="p-btn" id="submit" type="submit">查询</button>
+  </form>
+</div>
+
+<div class="p-card">
+  <p class="p-muted">
+    查询码在您提交成功后显示，形如 <b>482913</b>。若已丢失，
+    可拨打社区电话 {{ '0571-8601 0002' }} 核实身份后找回。
+  </p>
+</div>
+
+{% endblock %}
+{% block script %}
+<script>
+document.getElementById('f').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var err = document.getElementById('err');
+  var btn = document.getElementById('submit');
+  var phone = document.getElementById('phone').value.trim();
+  var code = document.getElementById('code').value.trim();
+  err.textContent = '';
+  if (!/^1[3-9]\d{9}$/.test(phone)) { err.textContent = '请填写正确的 11 位手机号'; return; }
+  if (!/^\d{6}$/.test(code)) { err.textContent = '查询码是 6 位数字'; return; }
+
+  btn.disabled = true; btn.textContent = '查询中…';
+  fetch('/api/portal/ticket?phone=' + encodeURIComponent(phone) + '&code=' + encodeURIComponent(code))
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (j.code === 0 && j.data) {
+        location.href = '/portal/ticket/' + j.data.id;
+      } else {
+        err.textContent = j.msg || '没有查到记录';
+        btn.disabled = false; btn.textContent = '查询';
+      }
+    }).catch(function () {
+      err.textContent = '网络异常，请稍后重试';
+      btn.disabled = false; btn.textContent = '查询';
+    });
+});
+</script>
+{% endblock %}

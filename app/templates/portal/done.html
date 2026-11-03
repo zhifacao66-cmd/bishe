@@ -1,0 +1,57 @@
+{% extends "portal/base.html" %}
+{% block title %}提交成功 · 幸福里居民服务{% endblock %}
+{% block sub %}请保存查询码{% endblock %}
+{% block body %}
+
+<div class="p-card" style="text-align:center">
+  <div style="font-size:44px;line-height:1.2">✅</div>
+  <h2 style="justify-content:center;margin-top:8px">已收到，正在分派</h2>
+  <p class="p-muted">您反映的情况已登记，系统按事项类型分别转给承办单位。</p>
+
+  <div class="p-code-box" style="margin-top:14px">
+    <div class="p-muted">查询码</div>
+    <div class="p-code" id="code">{{ ticket.code }}</div>
+    <button class="p-btn-line" id="copy" type="button">复制查询码</button>
+  </div>
+
+  <p class="p-muted" style="margin-top:14px">
+    凭 <b>{{ ticket.phone[:3] }}****{{ ticket.phone[-4:] }}</b> + 查询码 <b>{{ ticket.code }}</b> 可随时查看进度。
+    换手机、换设备都能查，不需要注册。
+  </p>
+</div>
+
+{% if ticket.item_count %}
+<div class="p-card">
+  <h2><span class="bar"></span>系统拆出了 {{ ticket.item_count }} 件事项</h2>
+  <div class="p-list">
+    <div class="p-item">
+      <div class="top"><span class="ttl">承办方向</span></div>
+      <div class="meta">{% for l in (ticket.line_summary or '').split('/') %}{{ l }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
+    </div>
+  </div>
+  <p class="p-muted">被拆成多条时，不同单位会分别联系您，请留意来电。</p>
+</div>
+{% endif %}
+
+<a class="p-btn" style="text-align:center;margin-bottom:12px" href="{{ url_for('portalviews.ticket', tid=ticket.id) }}">查看办理进度</a>
+
+{% endblock %}
+{% block script %}
+<script>
+document.getElementById('copy').addEventListener('click', function () {
+  var code = document.getElementById('code').textContent.trim();
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(code).then(function () {
+      document.getElementById('copy').textContent = '已复制';
+    });
+  } else {
+    var r = document.createRange();
+    r.selectNode(document.getElementById('code'));
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(r);
+    document.execCommand('copy');
+    document.getElementById('copy').textContent = '已复制';
+  }
+});
+</script>
+{% endblock %}

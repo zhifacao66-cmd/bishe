@@ -1,0 +1,15 @@
+Flask>=3.0
+Flask-SQLAlchemy>=3.1
+requests>=2.31
+
+# 运行时默认用 SQLite（随项目走，零配置），因此**不需要**任何数据库驱动。
+# 仅当把 DATABASE_URL 切到 MySQL 时才额外装驱动，届时单独执行：
+#   pip install PyMySQL
+# 之所以不写在这里：requirements 里出现 pymysql 会让「发布为应用」的沙箱
+# 判定本项目依赖外部 MySQL 而拒绝部署（沙箱只提供一个 HTTP 端口，不提供数据库）。
+# PyMySQL>=1.1
+
+# 以下仅供 scripts/ 下的测试与出图使用，运行时不需要：
+# psutil>=7.0        # soak_test.py 采样进程内存
+# matplotlib>=3.8    # plot_bench.py 出论文图表
+# 安装：pip install psutil matplotlib

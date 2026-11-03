@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ notice.title }}（{{ '发布版' if mode == 'official' else '打印版' }}）</title>
+<style>
+:root {
+  --ink: #000;
+  --fs: "FangSong_GB2312", "仿宋", FangSong, "STFangsong", serif;
+  --hei: "SimHei", "黑体", "Microsoft YaHei", sans-serif;
+  --song: "FZXiaoBiaoSong-B05S", "方正小标宋简体", "STZhongsong", "SimSun", "宋体", serif;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: #e9edf3; color: var(--ink);
+  font-family: var(--fs);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 工具栏（打印时隐藏） ---------- */
+.toolbar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 16px; background: #fff; border-bottom: 1px solid #d7dee8;
+  font-family: var(--hei);
+}
+.toolbar .sp { margin-left: auto; }
+.toolbar a, .toolbar button {
+  font: 14px/1 var(--hei); padding: 9px 16px; border-radius: 8px;
+  border: 1px solid #c9d3e0; background: #fff; color: #1f5fd0;
+  cursor: pointer; text-decoration: none;
+}
+.toolbar .primary { background: #1f5fd0; border-color: #1f5fd0; color: #fff; }
+.toolbar .hint { font-size: 12px; color: #7b8798; font-family: var(--hei); }
+
+/* ---------- 纸张 ---------- */
+.paper {
+  width: 21cm; min-height: 29.7cm; margin: 22px auto 40px;
+  background: #fff; box-shadow: 0 4px 24px rgba(15, 30, 55, .13);
+  padding: 3.2cm 2.6cm 3.0cm 2.8cm;
+}
+
+/* ---------- 红头（仅发布版） ---------- */
+.redhead { text-align: center; margin-bottom: 6mm; }
+.redhead .org {
+  font-family: var(--song); font-weight: 700; color: #d0021b;
+  font-size: 30px; letter-spacing: 3px; line-height: 1.35;
+  padding: 0 4mm;
+}
+.redhead .org.long { font-size: 25px; letter-spacing: 1px; }
+.redhead .docno {
+  font-family: var(--fs); font-size: 16px; margin: 10mm 0 4mm;
+}
+.redhead .rule { height: 2.4px; background: #d0021b; }
+
+/* ---------- 标题与正文 ---------- */
+.doc-title {
+  font-family: var(--song); font-weight: 700; font-size: 22px;
+  text-align: center; line-height: 1.6; margin: 8mm 0 7mm;
+  letter-spacing: 1px;
+}
+.body { font-size: 16px; line-height: 1.85; text-align: justify; }
+.body p { margin: 0 0 .35em; text-indent: 2em; }
+.body h3, .body h4, .body h5 { font-family: var(--hei); font-size: 16px; margin: 1em 0 .4em; text-indent: 2em; }
+.body ul, .body ol { margin: 0 0 .5em; padding-left: 2.6em; }
+.body li { margin-bottom: .2em; }
+.body blockquote { margin: .6em 0; padding: .4em .8em; border-left: 3px solid #d0021b;
+  background: #fafafa; font-size: 15px; }
+.notice-table { width: 100%; border-collapse: collapse; margin: .6em 0 1em; font-size: 14px; }
+.notice-table th, .notice-table td { border: 1px solid #333; padding: 5px 8px; text-align: left; }
+/* 首列多是"自查阶段"这类 4 字短标签，自动列宽会把它挤成两行，钉住不换行 */
+.notice-table th:first-child, .notice-table td:first-child { white-space: nowrap; }
+.notice-table th { background: #f4f6f9; font-family: var(--hei); font-weight: 400; }
+
+/* ---------- 落款 ---------- */
+.sign { margin-top: 16mm; text-align: right; font-size: 16px; line-height: 1.9; padding-right: 1em; }
+.sign .org { margin-bottom: 2mm; }
+
+/* ---------- 打印版（非公文）排版 ---------- */
+.mode-print .paper { padding: 2.4cm 2.2cm; }
+.mode-print .doc-title { font-family: var(--hei); font-size: 19px; margin: 0 0 10mm; letter-spacing: 0; }
+.mode-print .body { font-size: 12pt; line-height: 1.75; font-family: "SimSun", "宋体", serif; }
+.mode-print .meta { font-family: var(--hei); font-size: 10.5pt; color: #444; margin-bottom: 8mm;
+  padding-bottom: 6px; border-bottom: 1px solid #999; }
+.mode-print .meta span { margin-right: 18px; }
+.mode-print .sign { font-family: "SimSun", "宋体", serif; font-size: 12pt; }
+.foot-note { margin-top: 12mm; padding-top: 4mm; border-top: 1px dashed #bbb;
+  font-family: var(--hei); font-size: 9pt; color: #666; }
+
+/* ---------- 打印 ---------- */
+@page { size: A4; margin: 2.0cm 2.2cm; }
+@media print {
+  body { background: #fff; }
+  .toolbar { display: none !important; }
+  .paper {
+    width: auto; min-height: 0; margin: 0; padding: 0;
+    box-shadow: none;
+  }
+  .body p, .body h3, .body h4 { page-break-inside: avoid; }
+  .sign { page-break-inside: avoid; }
+  .foot-note { display: none; }
+}
+
+@media screen and (max-width: 780px) {
+  .paper { width: auto; min-height: 0; margin: 12px; padding: 22px 18px 28px; }
+  .redhead .org { font-size: 22px; }
+  .doc-title { font-size: 18px; }
+  .body { font-size: 15px; }
+}
+</style>
+</head>
+<body class="mode-{{ mode }}">
+
+<div class="toolbar">
+  <a href="{{ url_for('portalviews.notice', nid=notice.id) }}">← 网页版</a>
+  {% if mode == 'official' %}
+    <a href="{{ url_for('portalviews.notice', nid=notice.id, mode='print') }}">切到打印版</a>
+  {% else %}
+    <a href="{{ url_for('portalviews.notice', nid=notice.id, mode='official') }}">切到发布版</a>
+  {% endif %}
+  <span class="sp"></span>
+  <span class="hint">A4 · 页边距可在打印设置中调整</span>
+  <button class="primary" onclick="window.print()">打印 / 另存为 PDF</button>
+</div>
+
+<div class="paper">
+  {% if mode == 'official' %}
+  <div class="redhead">
+    <div class="org{{ ' long' if notice.issuer|length > 10 }}">{{ notice.issuer }}</div>
+    {% if notice.doc_no %}<div class="docno">{{ notice.doc_no }}</div>{% endif %}
+    <div class="rule"></div>
+  </div>
+  {% else %}
+  <div class="meta">
+    <span>发文单位：{{ notice.issuer }}</span>
+    {% if notice.doc_no %}<span>文号：{{ notice.doc_no }}</span>{% endif %}
+    <span>成文日期：{{ notice.issued_at.strftime('%Y-%m-%d') if notice.issued_at else '—' }}</span>
+  </div>
+  {% endif %}
+
+  <h1 class="doc-title">{{ notice.title }}</h1>
+
+  <div class="body">{{ body|safe }}</div>
+
+  <div class="sign">
+    <div class="org">{{ notice.issuer }}</div>
+    <div>{{ notice.issued_at.strftime('%Y年%m月%d日') if notice.issued_at else '' }}</div>
+  </div>
+
+  {% if mode == 'print' %}
+  <div class="foot-note">
+    打印时间：{{ now }}　|　来源文件：{{ notice.source_file or '系统录入' }}　|　本文由社区"极简减负"系统生成
+  </div>
+  {% endif %}
+</div>
+
+<script>
+/* 打印前把上下文收干净：避免部分浏览器把工具栏带上纸 */
+window.addEventListener('beforeprint', function () {
+  document.querySelector('.toolbar').style.display = 'none';
+});
+window.addEventListener('afterprint', function () {
+  document.querySelector('.toolbar').style.display = '';
+});
+</script>
+</body>
+</html>

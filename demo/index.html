@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>社区"极简减负"智能体系统 · Demo v0.2</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+:root{
+  --primary:#206bc4; --primary-dark:#1a569d; --bg:#f5f7fb; --card:#ffffff;
+  --border:#e6e9f0; --text:#1f2937; --muted:#6b7a90; --green:#2fb344;
+  --orange:#f59f00; --red:#d63939; --teal:#0ca678; --purple:#ae3ec9;
+  --radius:10px; --shadow:0 1px 3px rgba(31,41,55,.06),0 1px 2px rgba(31,41,55,.04);
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:"Microsoft YaHei","PingFang SC",-apple-system,sans-serif;}
+body{background:var(--bg);color:var(--text);font-size:14px;display:flex;min-height:100vh;}
+
+/* ===== 侧边栏 ===== */
+.sidebar{width:230px;background:#fff;border-right:1px solid var(--border);flex-shrink:0;
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+.brand{padding:20px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.brand-logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--primary),#4299e1);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;}
+.brand b{font-size:14px;} .brand small{display:block;color:var(--muted);font-size:11px;font-weight:400;}
+.nav{padding:12px 10px;flex:1;}
+.nav-label{font-size:11px;color:var(--muted);padding:10px 12px 6px;letter-spacing:1px;}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:#3b4a5e;
+  text-decoration:none;font-size:13px;margin-bottom:2px;}
+.nav a .ico{width:18px;text-align:center;}
+.nav a:hover{background:#f1f5fb;color:var(--primary);}
+.nav a.active{background:#e8f1fc;color:var(--primary);font-weight:600;}
+.nav a .cnt{margin-left:auto;background:#e8f1fc;color:var(--primary);font-size:11px;
+  border-radius:10px;padding:1px 7px;}
+.side-foot{padding:14px 18px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);}
+.side-foot .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:6px;}
+
+/* ===== 主区 ===== */
+.main{flex:1;min-width:0;}
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:14px 28px;
+  display:flex;align-items:center;justify-content:space-between;}
+.topbar h1{font-size:16px;font-weight:600;}
+.topbar .sub{color:var(--muted);font-size:12px;margin-top:2px;}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#e6f6ee;color:var(--teal);
+  border:1px solid #bfe8d6;padding:4px 12px;border-radius:20px;font-size:12px;}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--primary);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:13px;}
+.content{padding:24px 28px;display:grid;grid-template-columns:repeat(12,1fr);gap:18px;}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  box-shadow:var(--shadow);overflow:hidden;}
+.card-h{padding:15px 18px;border-bottom:1px solid var(--border);display:flex;
+  align-items:center;justify-content:space-between;}
+.card-h h2{font-size:14px;font-weight:600;}
+.card-h .hint{font-size:12px;color:var(--muted);}
+.card-b{padding:18px;}
+.col-8{grid-column:span 8;} .col-7{grid-column:span 7;} .col-6{grid-column:span 6;}
+.col-5{grid-column:span 5;} .col-4{grid-column:span 4;} .col-12{grid-column:span 12;}
+
+/* 统计卡 */
+.stat{padding:18px;display:flex;gap:14px;align-items:center;}
+.stat .ic{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;
+  justify-content:center;font-size:20px;flex-shrink:0;}
+.stat .num{font-size:24px;font-weight:700;line-height:1.1;}
+.stat .lbl{font-size:12px;color:var(--muted);}
+.stat .trend{margin-left:auto;font-size:12px;font-weight:600;}
+
+/* FDE */
+.fde-input{width:100%;min-height:92px;border:1.5px solid var(--border);border-radius:9px;
+  padding:12px 14px;font-size:14px;resize:vertical;outline:none;background:#fbfcfe;}
+.fde-input:focus{border-color:var(--primary);background:#fff;box-shadow:0 0 0 3px rgba(32,107,196,.12);}
+.btn{border:none;border-radius:8px;padding:8px 18px;font-size:13px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--primary);color:#fff;}
+.btn-primary:hover{background:var(--primary-dark);}
+.btn-ghost{background:#f1f4f9;color:#4a5b70;}
+.btn-ghost:hover{background:#e6ebf3;}
+.quick{margin-top:10px;font-size:12px;color:var(--muted);}
+.quick a{color:var(--primary);cursor:pointer;text-decoration:none;margin-right:12px;}
+.quick a:hover{text-decoration:underline;}
+
+/* Agent 时间线 */
+.timeline{margin-top:6px;position:relative;padding-left:26px;}
+.timeline::before{content:"";position:absolute;left:9px;top:8px;bottom:8px;width:2px;background:var(--border);}
+.tl-item{position:relative;padding:0 0 18px 12px;opacity:0;transform:translateY(10px);transition:all .5s ease;}
+.tl-item.show{opacity:1;transform:none;}
+.tl-dot{position:absolute;left:-26px;top:2px;width:20px;height:20px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;}
+.tl-item b{font-size:13px;}
+.tl-item .desc{font-size:12.5px;color:#3b4a5e;margin-top:3px;}
+.tl-item .meta{font-size:12px;color:var(--muted);margin-top:3px;background:#f8fafc;
+  border:1px solid var(--border);border-radius:7px;padding:7px 10px;}
+.badge{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;margin-left:6px;font-weight:500;}
+.b-blue{background:#e3edfb;color:var(--primary);} .b-red{background:#fbe4e4;color:var(--red);}
+.b-orange{background:#fdf0d7;color:#b37700;} .b-green{background:#e0f5ea;color:#1e8e5a;}
+
+/* 表格 */
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;color:var(--muted);font-weight:500;font-size:12px;padding:9px 18px;
+  border-bottom:1px solid var(--border);background:#fafbfd;}
+td{padding:11px 18px;border-bottom:1px solid #f0f2f7;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#fafbfe;}
+
+/* 审计日志 */
+.log{font-family:Consolas,Monaco,monospace;font-size:12px;background:#101c2c;color:#8fc3f0;
+  border-radius:9px;padding:14px 16px;max-height:190px;overflow:auto;line-height:1.9;}
+.log .ok{color:#4ade80;} .log .warn{color:#fbbf24;}
+#chart1,#chart2{width:100%;height:260px;}
+</style>
+</head>
+<body>
+
+<!-- ===== 侧边栏 ===== -->
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-logo">🏘️</div>
+    <div><b>极简减负平台</b><small>Community Agent System</small></div>
+  </div>
+  <nav class="nav">
+    <div class="nav-label">业务</div>
+    <a href="#" class="active"><span class="ico">📝</span>FDE 首录台</a>
+    <a href="#"><span class="ico">📋</span>任务看板<span class="cnt">4</span></a>
+    <a href="#"><span class="ico">📤</span>物业工单<span class="cnt">2</span></a>
+    <a href="#"><span class="ico">🗂️</span>台账中心</a>
+    <div class="nav-label">管理</div>
+    <a href="#"><span class="ico">📊</span>报表中心</a>
+    <a href="#"><span class="ico">🔐</span>审计日志</a>
+    <a href="#"><span class="ico">⚙️</span>系统设置</a>
+  </nav>
+  <div class="side-foot"><span class="dot"></span>本地大模型运行中<br>Qwen2.5-7B · 数据不出内网</div>
+</aside>
+
+<!-- ===== 主区 ===== -->
+<div class="main">
+  <div class="topbar">
+    <div>
+      <h1>FDE 首录工作台</h1>
+      <div class="sub">一次录入 · 多方复用 · 全程留痕 —— 2026年10月17日 星期六</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <span class="chip">🛡️ 保密模式已开启</span>
+      <div class="avatar">王</div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- 统计卡 -->
+    <div class="card stat" style="grid-column:span 3">
+      <div class="ic" style="background:#e3edfb">📝</div>
+      <div><div class="num">46</div><div class="lbl">本周首录次数</div></div>
+      <div class="trend" style="color:var(--green)">↑12%</div>
+    </div>
+    <div class="card stat" style="grid-column:span 3">
+      <div class="ic" style="background:#e0f5ea">♻️</div>
+      <div><div class="num">112</div><div class="lbl">避免重复填报(条)</div></div>
+      <div class="trend" style="color:var(--green)">↑28%</div>
+    </div>
+    <div class="card stat" style="grid-column:span 3">
+      <div class="ic" style="background:#fdf0d7">⏱️</div>
+      <div><div class="num">18.5h</div><div class="lbl">本周节省工时</div></div>
+      <div class="trend" style="color:var(--green)">↑3.2h</div>
+    </div>
+    <div class="card stat" style="grid-column:span 3">
+      <div class="ic" style="background:#fbe4e4">🔐</div>
+      <div><div class="num">7</div><div class="lbl">敏感字段自动脱敏</div></div>
+      <div class="trend" style="color:var(--muted)">100%覆盖</div>
+    </div>
+
+    <!-- FDE 首录台 -->
+    <div class="card col-7">
+      <div class="card-h"><h2>📝 FDE 首录台</h2><span class="hint">用大白话说一遍，剩下的交给智能体</span></div>
+      <div class="card-b">
+        <textarea id="fdeInput" class="fde-input" placeholder="例如：2栋2单元202的张大爷反映楼道灯坏了，顺便登记他家新增一位租户李某，电话13800001234"></textarea>
+        <div style="margin-top:12px;display:flex;gap:10px;">
+          <button class="btn btn-primary" onclick="runFDE()">▶ 提交给智能体</button>
+          <button class="btn btn-ghost">🎤 语音录入</button>
+          <button class="btn btn-ghost">📷 拍照上传</button>
+        </div>
+        <div class="quick">试试示例：<a onclick="fillDemo(1)">报修+租户登记</a><a onclick="fillDemo(2)">独居老人走访</a><a onclick="fillDemo(3)">噪音纠纷调解</a></div>
+        <div class="timeline" id="flow" style="margin-top:20px;"></div>
+      </div>
+    </div>
+
+    <!-- 今日任务 -->
+    <div class="card col-5">
+      <div class="card-h"><h2>📋 今日任务</h2><span class="hint">督办Agent 实时监控</span></div>
+      <table>
+        <tr><th>事项</th><th>去向</th><th>状态</th></tr>
+        <tr><td>3栋楼道灯维修</td><td>物业</td><td><span class="badge b-orange">进行中</span></td></tr>
+        <tr><td>新增租户登记</td><td>综治</td><td><span class="badge b-green">已完成</span></td></tr>
+        <tr><td>月度人口变动报表</td><td>街道</td><td><span class="badge b-blue">待生成</span></td></tr>
+        <tr><td>独居老人走访</td><td>民政</td><td><span class="badge b-red">明日到期</span></td></tr>
+        <tr><td>5栋噪音调解归档</td><td>综治</td><td><span class="badge b-green">已完成</span></td></tr>
+      </table>
+    </div>
+
+    <!-- 图表 -->
+    <div class="card col-6">
+      <div class="card-h"><h2>📊 各业务线事项分布（本周）</h2></div>
+      <div class="card-b"><div id="chart1"></div></div>
+    </div>
+    <div class="card col-6">
+      <div class="card-h"><h2>🤖 Agent 协作处理量趋势</h2></div>
+      <div class="card-b"><div id="chart2"></div></div>
+    </div>
+
+    <!-- 审计日志 -->
+    <div class="card col-12">
+      <div class="card-h"><h2>🔐 保密与审计日志</h2><span class="hint">只追加 · 可追溯 · 不可篡改</span></div>
+      <div class="card-b">
+        <div class="log" id="logBox">
+[10:21:03] <span class="ok">[保密审查Agent]</span> 检测到手机号 138****1234 → AES脱敏存储<br>
+[10:21:04] <span class="ok">[拆解Agent]</span> 本地 Qwen2.5-7B 完成语义拆解 · 外网调用次数 0<br>
+[10:21:05] <span class="warn">[派单Agent]</span> 工单 #W2026-1017-03 推送物业端（已剔除敏感字段）<br>
+[10:21:06] <span class="ok">[填报Agent]</span> 人口台账复用 501 户历史档案 · 免重复采集<br>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* 图表 */
+const axisStyle={axisLine:{lineStyle:{color:'#d8dee9'}},axisLabel:{color:'#6b7a90'}};
+const c1=echarts.init(document.getElementById('chart1'));
+c1.setOption({tooltip:{},grid:{left:36,right:16,top:24,bottom:26},
+  xAxis:{type:'category',data:['综治','民政','物业','卫健','城管'],...axisStyle},
+  yAxis:{type:'value',splitLine:{lineStyle:{color:'#eef1f6'}},...axisStyle},
+  series:[{type:'bar',barWidth:30,data:[12,9,15,5,5],label:{show:true,position:'top',color:'#206bc4'},
+    itemStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,
+      colorStops:[{offset:0,color:'#4299e1'},{offset:1,color:'#206bc4'}]},borderRadius:[5,5,0,0]}}]});
+const c2=echarts.init(document.getElementById('chart2'));
+c2.setOption({tooltip:{trigger:'axis'},legend:{bottom:0,textStyle:{color:'#6b7a90'},itemWidth:14},
+  grid:{left:36,right:16,top:20,bottom:46},
+  xAxis:{type:'category',data:['周一','周二','周三','周四','周五'],...axisStyle},
+  yAxis:{type:'value',splitLine:{lineStyle:{color:'#eef1f6'}},...axisStyle},
+  series:[
+    {name:'拆解',type:'line',smooth:true,symbolSize:6,data:[8,10,7,12,9],itemStyle:{color:'#206bc4'},areaStyle:{color:'rgba(32,107,196,.08)'}},
+    {name:'派单',type:'line',smooth:true,symbolSize:6,data:[5,7,4,8,6],itemStyle:{color:'#f59f00'}},
+    {name:'台账',type:'line',smooth:true,symbolSize:6,data:[6,8,9,10,8],itemStyle:{color:'#2fb344'}}
+  ]});
+window.addEventListener('resize',()=>{c1.resize();c2.resize();});
+
+/* FDE 模拟 */
+const demos={
+  1:'2栋2单元202的张大爷反映楼道灯坏了，顺便登记他家新增一位租户李某，电话13800001234',
+  2:'今天走访了7栋的独居老人王奶奶，血压偏高已联系社区卫生站，下周复访',
+  3:'5栋302和402因装修噪音发生纠纷，已现场调解，双方同意装修限时作业'
+};
+function fillDemo(i){document.getElementById('fdeInput').value=demos[i];}
+const agents=[
+  {color:'#206bc4',name:'拆解Agent',badge:['b-blue','本地LLM'],desc:'识别出 2 个业务项',
+   meta:'① 物业报修：楼道灯（3栋2单元）　② 人口变动：新增租户李某'},
+  {color:'#d63939',name:'保密审查Agent',badge:['b-red','脱敏'],desc:'发现敏感字段：手机号 → 已脱敏',
+   meta:'手机号/身份证等三级管控，加密存储，仅授权角色可见'},
+  {color:'#f59f00',name:'派单Agent',badge:['b-orange','→ 物业'],desc:'生成物业工单 #W2026-1017-03',
+   meta:'推送物业端：楼道灯维修 · 时限24小时 · 工单已剔除居民信息'},
+  {color:'#2fb344',name:'填报Agent',badge:['b-green','→ 综治/街道'],desc:'租户信息自动填入人口台账',
+   meta:'复用501户历史档案，仅需确认；月末自动汇总上报街道'}
+];
+function runFDE(){
+  const t=document.getElementById('fdeInput').value.trim();
+  if(!t){alert('请先用大白话描述事项～');return;}
+  const box=document.getElementById('flow');box.innerHTML='';
+  agents.forEach((a,i)=>setTimeout(()=>{
+    const d=document.createElement('div');d.className='tl-item';
+    d.innerHTML=`<div class="tl-dot" style="background:${a.color}">${i+1}</div>
+      <b>${a.name}</b><span class="badge ${a.badge[0]}">${a.badge[1]}</span>
+      <div class="desc">${a.desc}</div><div class="meta">${a.meta}</div>`;
+    box.appendChild(d);requestAnimationFrame(()=>d.classList.add('show'));
+    log(`[${new Date().toTimeString().slice(0,8)}] [${a.name}] ${a.desc}`);
+  },550*(i+1)));
+}
+function log(m){const lb=document.getElementById('logBox');lb.innerHTML=m+'<br>'+lb.innerHTML;}
+</script>
+</body>
+</html>

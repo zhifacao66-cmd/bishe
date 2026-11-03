@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}系统状态 · 极简减负平台{% endblock %}
+{% block page_title %}系统状态{% endblock %}
+{% block page_sub %}模型通道自检 · 依赖探活 · 最近推理记录{% endblock %}
+
+{% block content %}
+<!-- 四张卡 -->
+<div class="card stat col-3">
+  <div class="ic" style="background:#e3edfb">🛰️</div>
+  <div><div class="num" id="cState">-</div><div class="lbl">模型通道</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#e0f5ea">🧠</div>
+  <div><div class="num" id="cModel" style="font-size:19px">-</div><div class="lbl">当前模型</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#fdf0d7">⚡</div>
+  <div><div class="num" id="cAvg">-</div><div class="lbl">平均推理耗时</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#fbe4e4">📞</div>
+  <div><div class="num" id="cCalls">-</div><div class="lbl">累计模型调用</div></div>
+</div>
+
+<!-- 通道详情 -->
+<div class="card col-7">
+  <div class="card-h"><h2>🔌 推理通道</h2><span class="hint" id="hint">读取中…</span></div>
+  <div class="card-b">
+    <div class="tw">
+      <table>
+        <tbody id="chBody">
+          <tr><td colspan="2" style="color:var(--muted)">加载中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:14px;padding:12px 14px;background:#f6f9ff;border:1px solid #dbe7fb;border-radius:9px;font-size:12.5px;line-height:1.9;color:#4a5a72">
+      <b>为什么线上是「远程」通道：</b>部署环境是没有显卡的无状态容器，跑不了 8B 模型。
+      请求经隧道回到开发者本机的 Ollama，推理仍在本地显卡上完成——
+      居民信息不会经过任何第三方模型服务，与「数据不出内网」的部署要求一致。
+      隧道断开时应用不会报错，而是自动降级为规则引擎（见论文消融实验的基线配置）。
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn btn-ghost" style="padding:5px 14px;font-size:12.5px" onclick="netCheck()">
+        🌐 出网自检（DNS / 443 / TLS）
+      </button>
+      <div id="netOut" style="margin-top:10px;font-size:12.5px;line-height:1.9;color:#4a5a72"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 试跑 -->
+<div class="card col-5">
+  <div class="card-h"><h2>🧪 立即试跑</h2><span class="hint">真实推理，不是探活</span></div>
+  <div class="card-b">
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.8;margin-bottom:10px">
+      用一句真实的居民报修描述让模型压缩成工单标题，返回的耗时与文本都来自模型本身。
+    </div>
+    <button class="btn btn-primary" id="btnTest" onclick="runTest()">▶ 跑一次</button>
+    <div id="testOut" style="margin-top:14px;font-size:13px;line-height:1.9"></div>
+  </div>
+</div>
+
+<!-- 最近调用 -->
+<div class="card col-12">
+  <div class="card-h"><h2>🕘 最近推理记录</h2><span class="hint">只记耗时与成败，不记输入输出正文（避免居民信息进日志）</span></div>
+  <div id="failBar" style="display:none;margin:0 0 4px;padding:11px 14px;border-radius:9px;
+       background:#fff5ed;border:1px solid #f5d2b4;font-size:12.5px;line-height:1.8"></div>
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:110px">时间</th><th style="width:150px">模型</th>
+        <th style="width:95px">耗时</th><th style="width:90px">结果</th><th>说明</th></tr></thead>
+      <tbody id="recent"><tr><td colspan="5" style="text-align:center;color:var(--muted)">暂无调用</td></tr></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SRC = {env:"环境变量", file:"llm.json", "default":"内置默认"};
+const CLS = {ok:"b-green", bad:"b-orange"};
+
+function badge(text, cls){ return `<span class="badge ${cls}">${text}</span>`; }
+
+async function load(){
+  const j = await api('/api/health');
+  if(j.code !== 0){
+    // 状态页最忌讳"一片空白"：没有数字不等于"一切正常"，而是"这次没问出来"。
+    // 必须把原因写在卡片里，否则看的人会以为模型在线。
+    document.getElementById('cState').innerHTML = badge('读取失败', CLS.bad);
+    document.getElementById('hint').textContent = j.msg || '状态接口没有返回数据';
+    return;
+  }
+  const d = j.data, L = d.llm, ch = L.channel, st = L.stats;
+  const pr = L.probe || {};
+
+  document.getElementById('cState').innerHTML =
+    L.available ? badge('在线', CLS.ok) : badge('降级', CLS.bad);
+  document.getElementById('cModel').textContent = L.model || '—';
+  document.getElementById('cAvg').textContent = st.calls ? (st.avg_ms + ' ms') : '—';
+  document.getElementById('cCalls').textContent = st.calls || 0;
+  document.getElementById('hint').textContent =
+    (ch.remote ? '远程通道' : '本机通道') + ' · 来源：' + (SRC[ch.source] || ch.source);
+
+  const rows = [
+    ['通道类型', ch.remote ? '远程（经隧道回本机 GPU）' : '本机直连'],
+    ['服务地址', ch.base],
+    ['模型', ch.model],
+    ['访问令牌', ch.token_set ? '已配置（不回显）' : '未配置'],
+    ['配置来源', SRC[ch.source] || ch.source],
+    ['请求超时', ch.timeout_s + ' 秒'],
+    ['模型驻留', ch.keep_alive ? (ch.keep_alive + '（空闲超时后才卸载，减少冷加载）') : '默认 5 分钟'],
+    ['探活', pr.ok
+      ? `正常 · ${pr.ms} ms`
+      // error/detail 是**对端返回的原文**（隧道、上游模型都可能塞一段 HTML 进来），
+      // 系统状态页恰好是管理员最常盯的一页，这里不转义等于给自己开一个口子
+      : `<span style="color:#b45309">失败 · ${esc(pr.error || '未知')} · ${pr.ms} ms</span>`
+        + (pr.detail ? `<div style="font-size:11.5px;color:var(--muted);margin-top:2px">${esc(pr.detail)}</div>` : '')],
+    ['排队闸门', `并发上限 ${L.gate.limit} · 累计放行 ${L.gate.served} · 拒绝 ${L.gate.rejected}`
+      + (L.gate.stale ? ` · <span style="color:#b45309">已回收僵死 ${L.gate.stale}</span>` : '')
+      + (L.gate.inflight ? ` · 当前在跑 ${L.gate.inflight}（已 ${Math.round(L.gate.hold_age_s || 0)}s）` : '')],
+    ['数据库', `${d.db.engine} · ${d.db.ok ? '正常' : '异常'} · ${d.db.latency_ms} ms`],
+    ['实例', `pid ${d.pid} · 已运行 ${Math.round(d.uptime_s/60)} 分钟`],
+  ];
+  document.getElementById('chBody').innerHTML = rows.map(([k,v]) =>
+    `<tr><td style="width:130px;color:var(--muted)">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+
+  // 失败原因单独提出来放顶部：翻 20 条记录去找哪次红了，排障时太慢。
+  // 同时要说明"这叫降级不叫宕机"——业务仍然返回 200，只是走了规则/原文路径。
+  const le = st.last_error || {};
+  const bar = document.getElementById('failBar');
+  if(st.fail > 0){
+    bar.style.display = '';
+    bar.innerHTML = `<b>⚠️ 累计 ${st.fail} 次调用失败</b>（业务已自动降级，未中断）`
+      + (le.kind ? `<br>最近一次：${esc(le.at)} · 类型 <code>${esc(le.kind)}</code>`
+         + (le.detail ? ` · ${esc(le.detail)}` : '') : '')
+      + `<br><span style="color:var(--muted)">connect / timeout 多为隧道抖动或模型冷加载，重试即可；
+         若持续出现，检查本机 Ollama 与隧道进程是否还在运行。</span>`;
+  }
+
+  const rec = st.recent || [];
+  document.getElementById('recent').innerHTML = rec.length ? rec.map(r =>
+    `<tr><td>${esc(r.at)}</td><td style="font-size:12.5px">${esc(r.model)}</td>
+     <td>${r.ms} ms</td>
+     <td>${r.ok ? badge('成功', CLS.ok) : badge('降级', CLS.bad)}</td>
+     <td style="font-size:12px;color:var(--muted)">${r.ok ? '' : esc(r.err) + (r.detail ? ' · ' + esc(r.detail) : '')}</td></tr>`).join('')
+    : '<tr><td colspan="5" style="text-align:center;color:var(--muted)">暂无调用</td></tr>';
+}
+
+async function netCheck(){
+  const out = document.getElementById('netOut');
+  out.innerHTML = '<span style="color:var(--muted)">探测中…</span>';
+  try{
+    const j = await api('/api/health/net');
+    if(j.code !== 0){ out.textContent = j.msg; return; }
+    const n = j.data || {};
+    if(n.skipped){ out.innerHTML = `<span style="color:var(--muted)">${n.skipped}</span>`; return; }
+    const dd = n.direct || {}, px = n.proxy || {};
+    const ms = v => (v != null ? `${v} ms` : '—');
+    out.innerHTML =
+      `<div><b>目标</b>：${n.host || '—'}</div>`
+      + `<div><b>直连</b>：DNS ${ms(dd.dns_ms)} · TCP443 ${ms(dd.tcp_ms)} · TLS ${ms(dd.tls_ms)}</div>`
+      + (dd.error ? `<div style="color:var(--muted)">${dd.error}</div>` : '')
+      + `<div><b>代理</b>：${px.in_use
+          ? `已启用（来自 ${px.from}，${px.endpoint || ''}）`
+          : '未发现可用代理变量'}</div>`
+      + (px.in_use
+          ? `<div style="color:var(--muted)">经代理请求模型清单：${px.ok ? '成功' : '失败'} · ${ms(px.ms)}${px.status ? ' · HTTP ' + px.status : ''}${px.detail ? ' · ' + px.detail : ''}</div>`
+          : '')
+      + `<div style="margin-top:6px"><b>结论</b>：${n.verdict || '—'}</div>`
+      + `<div style="color:var(--muted);font-size:11.5px;margin-top:4px">代理相关环境变量：${(n.proxy_env_keys || []).join('、') || '无'}</div>`;
+  } finally { /* nothing */ }
+}
+
+async function runTest(){
+  const btn = document.getElementById('btnTest'), out = document.getElementById('testOut');
+  btn.disabled = true; btn.textContent = '推理中…';
+  out.innerHTML = '<span style="color:var(--muted)">首次调用需加载模型权重，可能要十几秒…</span>';
+  try{
+    const j = await api('/api/health/llm-test', {method:'POST'});
+    const d = j.data || {};
+    if(j.code !== 0){ out.textContent = j.msg; return; }
+    out.innerHTML = d.ok
+      ? `<div style="font-size:13px">模型输出：<b>${esc(d.output) || '（空）'}</b></div>
+         <div style="color:var(--muted);margin-top:6px">${d.model} · ${d.elapsed_ms} ms · ${d.channel.remote ? '远程通道' : '本机通道'}</div>`
+      : `<div>${badge('已降级', CLS.bad)} 模型不可用：<span style="color:var(--muted)">${esc(d.reason)}</span></div>
+         <div style="color:var(--muted);margin-top:6px">业务请求仍会正常返回，走规则引擎兜底。</div>`;
+    load();
+  } finally { btn.disabled = false; btn.textContent = '▶ 跑一次'; }
+}
+
+load();
+setInterval(load, 15000);
+</script>
+{% endblock %}

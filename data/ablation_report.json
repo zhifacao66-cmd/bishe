@@ -1,0 +1,2135 @@
+{
+  "generated_at": "2026-10-19 11:29:15",
+  "cases": 43,
+  "think_subset": [
+    1,
+    9,
+    14,
+    27,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40
+  ],
+  "results": [
+    {
+      "config": "rules",
+      "samples": 43,
+      "n_acc": 0.813953488372093,
+      "type_precision": 0.7708333333333334,
+      "type_recall": 0.74,
+      "type_f1": 0.7551020408163266,
+      "line_acc": 0.46,
+      "avg_seconds": 3.398850906726926e-06,
+      "fallback": 0
+    },
+    {
+      "config": "json",
+      "samples": 43,
+      "n_acc": 0.8604651162790697,
+      "type_precision": 1.0,
+      "type_recall": 0.86,
+      "type_f1": 0.924731182795699,
+      "line_acc": 0.84,
+      "avg_seconds": 1.198746448339418,
+      "fallback": 0
+    },
+    {
+      "config": "schema",
+      "samples": 43,
+      "n_acc": 0.9767441860465116,
+      "type_precision": 0.9803921568627451,
+      "type_recall": 1.0,
+      "type_f1": 0.99009900990099,
+      "line_acc": 1.0,
+      "avg_seconds": 1.3408655344053757,
+      "fallback": 0
+    },
+    {
+      "config": "full",
+      "samples": 43,
+      "n_acc": 0.9767441860465116,
+      "type_precision": 0.9803921568627451,
+      "type_recall": 1.0,
+      "type_f1": 0.99009900990099,
+      "line_acc": 1.0,
+      "avg_seconds": 1.352779277535372,
+      "fallback": 0
+    },
+    {
+      "config": "think",
+      "samples": 10,
+      "n_acc": 0.9,
+      "type_precision": 0.9444444444444444,
+      "type_recall": 1.0,
+      "type_f1": 0.9714285714285714,
+      "line_acc": 1.0,
+      "avg_seconds": 12.341358590126038,
+      "fallback": 0
+    }
+  ],
+  "details": {
+    "rules": [
+      {
+        "no": 1,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 2,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 3,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 4,
+        "n_ok": false,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1,
+          "走访": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 5,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 6,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 7,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 8,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 9,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 10,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 11,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 12,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 13,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 14,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 15,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 16,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 17,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 18,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 19,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 20,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 21,
+        "n_ok": false,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1,
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 22,
+        "n_ok": false,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1,
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 23,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 24,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 25,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 26,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 27,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 28,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 29,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 30,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 31,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 32,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 33,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 34,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 35,
+        "n_ok": false,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 2
+        }
+      },
+      {
+        "no": 36,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1,
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1,
+          "报修": 1
+        }
+      },
+      {
+        "no": 37,
+        "n_ok": false,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1,
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1,
+          "报修": 2
+        }
+      },
+      {
+        "no": 38,
+        "n_ok": false,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "走访": 1,
+          "报修": 1
+        }
+      },
+      {
+        "no": 39,
+        "n_ok": false,
+        "cost": 0.0,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1,
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 40,
+        "n_ok": false,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1,
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 41,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 42,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 43,
+        "n_ok": true,
+        "cost": 0.0,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      }
+    ],
+    "json": [
+      {
+        "no": 1,
+        "n_ok": true,
+        "cost": 1.779,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 2,
+        "n_ok": true,
+        "cost": 1.139,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 3,
+        "n_ok": true,
+        "cost": 1.216,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 4,
+        "n_ok": true,
+        "cost": 1.276,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 5,
+        "n_ok": true,
+        "cost": 1.425,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 6,
+        "n_ok": true,
+        "cost": 1.28,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 7,
+        "n_ok": true,
+        "cost": 1.163,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 8,
+        "n_ok": true,
+        "cost": 0.992,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 9,
+        "n_ok": true,
+        "cost": 2.513,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 10,
+        "n_ok": true,
+        "cost": 1.754,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 11,
+        "n_ok": true,
+        "cost": 1.243,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 12,
+        "n_ok": true,
+        "cost": 1.128,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 13,
+        "n_ok": true,
+        "cost": 1.216,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 14,
+        "n_ok": true,
+        "cost": 1.203,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 15,
+        "n_ok": true,
+        "cost": 0.969,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 16,
+        "n_ok": true,
+        "cost": 1.191,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 17,
+        "n_ok": true,
+        "cost": 1.075,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 18,
+        "n_ok": true,
+        "cost": 0.98,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 19,
+        "n_ok": true,
+        "cost": 1.18,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 20,
+        "n_ok": true,
+        "cost": 0.894,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 21,
+        "n_ok": true,
+        "cost": 0.944,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 22,
+        "n_ok": true,
+        "cost": 1.108,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 23,
+        "n_ok": true,
+        "cost": 1.081,
+        "pred_types": {
+          "咨询": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 24,
+        "n_ok": true,
+        "cost": 0.722,
+        "pred_types": {
+          "咨询": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 25,
+        "n_ok": true,
+        "cost": 1.227,
+        "pred_types": {
+          "咨询": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 26,
+        "n_ok": true,
+        "cost": 0.88,
+        "pred_types": {
+          "咨询": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 27,
+        "n_ok": true,
+        "cost": 1.079,
+        "pred_types": {
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 28,
+        "n_ok": true,
+        "cost": 1.203,
+        "pred_types": {
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 29,
+        "n_ok": true,
+        "cost": 1.244,
+        "pred_types": {
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 30,
+        "n_ok": true,
+        "cost": 1.272,
+        "pred_types": {
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 31,
+        "n_ok": true,
+        "cost": 1.53,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 32,
+        "n_ok": true,
+        "cost": 1.252,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 33,
+        "n_ok": true,
+        "cost": 0.998,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 34,
+        "n_ok": true,
+        "cost": 0.967,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 35,
+        "n_ok": false,
+        "cost": 1.026,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 2
+        }
+      },
+      {
+        "no": 36,
+        "n_ok": false,
+        "cost": 1.664,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1,
+          "报修": 1
+        }
+      },
+      {
+        "no": 37,
+        "n_ok": false,
+        "cost": 1.795,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1,
+          "报修": 2
+        }
+      },
+      {
+        "no": 38,
+        "n_ok": false,
+        "cost": 1.124,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1,
+          "报修": 1
+        }
+      },
+      {
+        "no": 39,
+        "n_ok": false,
+        "cost": 0.974,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1,
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 40,
+        "n_ok": false,
+        "cost": 1.012,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1,
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 41,
+        "n_ok": true,
+        "cost": 0.881,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 42,
+        "n_ok": true,
+        "cost": 0.959,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 43,
+        "n_ok": true,
+        "cost": 0.985,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      }
+    ],
+    "schema": [
+      {
+        "no": 1,
+        "n_ok": true,
+        "cost": 1.354,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 2,
+        "n_ok": true,
+        "cost": 1.132,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 3,
+        "n_ok": true,
+        "cost": 1.094,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 4,
+        "n_ok": false,
+        "cost": 2.026,
+        "pred_types": {
+          "报修": 1,
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 5,
+        "n_ok": true,
+        "cost": 1.193,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 6,
+        "n_ok": true,
+        "cost": 1.053,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 7,
+        "n_ok": true,
+        "cost": 1.071,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 8,
+        "n_ok": true,
+        "cost": 1.007,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 9,
+        "n_ok": true,
+        "cost": 1.804,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 10,
+        "n_ok": true,
+        "cost": 1.395,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 11,
+        "n_ok": true,
+        "cost": 1.323,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 12,
+        "n_ok": true,
+        "cost": 1.571,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 13,
+        "n_ok": true,
+        "cost": 1.553,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 14,
+        "n_ok": true,
+        "cost": 1.223,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 15,
+        "n_ok": true,
+        "cost": 0.977,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 16,
+        "n_ok": true,
+        "cost": 1.225,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 17,
+        "n_ok": true,
+        "cost": 1.065,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 18,
+        "n_ok": true,
+        "cost": 0.998,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 19,
+        "n_ok": true,
+        "cost": 1.201,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 20,
+        "n_ok": true,
+        "cost": 0.893,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 21,
+        "n_ok": true,
+        "cost": 0.941,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 22,
+        "n_ok": true,
+        "cost": 1.14,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 23,
+        "n_ok": true,
+        "cost": 1.063,
+        "pred_types": {
+          "咨询": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 24,
+        "n_ok": true,
+        "cost": 0.707,
+        "pred_types": {
+          "咨询": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 25,
+        "n_ok": true,
+        "cost": 1.049,
+        "pred_types": {
+          "咨询": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 26,
+        "n_ok": true,
+        "cost": 0.891,
+        "pred_types": {
+          "咨询": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 27,
+        "n_ok": true,
+        "cost": 1.067,
+        "pred_types": {
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 28,
+        "n_ok": true,
+        "cost": 1.113,
+        "pred_types": {
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 29,
+        "n_ok": true,
+        "cost": 1.304,
+        "pred_types": {
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 30,
+        "n_ok": true,
+        "cost": 1.28,
+        "pred_types": {
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 31,
+        "n_ok": true,
+        "cost": 1.099,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 32,
+        "n_ok": true,
+        "cost": 0.994,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 33,
+        "n_ok": true,
+        "cost": 1.037,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 34,
+        "n_ok": true,
+        "cost": 0.981,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 35,
+        "n_ok": true,
+        "cost": 2.53,
+        "pred_types": {
+          "报修": 2
+        },
+        "exp_types": {
+          "报修": 2
+        }
+      },
+      {
+        "no": 36,
+        "n_ok": true,
+        "cost": 3.12,
+        "pred_types": {
+          "人口变动": 1,
+          "报修": 1
+        },
+        "exp_types": {
+          "人口变动": 1,
+          "报修": 1
+        }
+      },
+      {
+        "no": 37,
+        "n_ok": true,
+        "cost": 3.507,
+        "pred_types": {
+          "人口变动": 1,
+          "报修": 2
+        },
+        "exp_types": {
+          "人口变动": 1,
+          "报修": 2
+        }
+      },
+      {
+        "no": 38,
+        "n_ok": true,
+        "cost": 2.042,
+        "pred_types": {
+          "走访": 1,
+          "报修": 1
+        },
+        "exp_types": {
+          "走访": 1,
+          "报修": 1
+        }
+      },
+      {
+        "no": 39,
+        "n_ok": true,
+        "cost": 1.95,
+        "pred_types": {
+          "调解": 1,
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "调解": 1,
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 40,
+        "n_ok": true,
+        "cost": 1.796,
+        "pred_types": {
+          "其他": 1,
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "其他": 1,
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 41,
+        "n_ok": true,
+        "cost": 0.919,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 42,
+        "n_ok": true,
+        "cost": 0.947,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 43,
+        "n_ok": true,
+        "cost": 1.022,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      }
+    ],
+    "full": [
+      {
+        "no": 1,
+        "n_ok": true,
+        "cost": 1.273,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 2,
+        "n_ok": true,
+        "cost": 1.127,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 3,
+        "n_ok": true,
+        "cost": 1.072,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 4,
+        "n_ok": false,
+        "cost": 2.013,
+        "pred_types": {
+          "报修": 1,
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 5,
+        "n_ok": true,
+        "cost": 1.223,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 6,
+        "n_ok": true,
+        "cost": 1.031,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 7,
+        "n_ok": true,
+        "cost": 1.063,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 8,
+        "n_ok": true,
+        "cost": 0.94,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 9,
+        "n_ok": true,
+        "cost": 1.735,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 10,
+        "n_ok": true,
+        "cost": 1.462,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 11,
+        "n_ok": true,
+        "cost": 1.432,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 12,
+        "n_ok": true,
+        "cost": 1.218,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 13,
+        "n_ok": true,
+        "cost": 1.261,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 14,
+        "n_ok": true,
+        "cost": 1.202,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 15,
+        "n_ok": true,
+        "cost": 0.993,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 16,
+        "n_ok": true,
+        "cost": 1.556,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 17,
+        "n_ok": true,
+        "cost": 1.755,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 18,
+        "n_ok": true,
+        "cost": 1.143,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 19,
+        "n_ok": true,
+        "cost": 1.227,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 20,
+        "n_ok": true,
+        "cost": 0.889,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 21,
+        "n_ok": true,
+        "cost": 1.003,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 22,
+        "n_ok": true,
+        "cost": 1.21,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 23,
+        "n_ok": true,
+        "cost": 1.072,
+        "pred_types": {
+          "咨询": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 24,
+        "n_ok": true,
+        "cost": 0.718,
+        "pred_types": {
+          "咨询": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 25,
+        "n_ok": true,
+        "cost": 1.074,
+        "pred_types": {
+          "咨询": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 26,
+        "n_ok": true,
+        "cost": 0.917,
+        "pred_types": {
+          "咨询": 1
+        },
+        "exp_types": {
+          "咨询": 1
+        }
+      },
+      {
+        "no": 27,
+        "n_ok": true,
+        "cost": 1.071,
+        "pred_types": {
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 28,
+        "n_ok": true,
+        "cost": 1.1,
+        "pred_types": {
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 29,
+        "n_ok": true,
+        "cost": 1.234,
+        "pred_types": {
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 30,
+        "n_ok": true,
+        "cost": 1.168,
+        "pred_types": {
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 31,
+        "n_ok": true,
+        "cost": 1.057,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 32,
+        "n_ok": true,
+        "cost": 0.931,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 33,
+        "n_ok": true,
+        "cost": 0.97,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 34,
+        "n_ok": true,
+        "cost": 0.98,
+        "pred_types": {
+          "其他": 1
+        },
+        "exp_types": {
+          "其他": 1
+        }
+      },
+      {
+        "no": 35,
+        "n_ok": true,
+        "cost": 1.831,
+        "pred_types": {
+          "报修": 2
+        },
+        "exp_types": {
+          "报修": 2
+        }
+      },
+      {
+        "no": 36,
+        "n_ok": true,
+        "cost": 2.958,
+        "pred_types": {
+          "人口变动": 1,
+          "报修": 1
+        },
+        "exp_types": {
+          "人口变动": 1,
+          "报修": 1
+        }
+      },
+      {
+        "no": 37,
+        "n_ok": true,
+        "cost": 3.865,
+        "pred_types": {
+          "人口变动": 1,
+          "报修": 2
+        },
+        "exp_types": {
+          "人口变动": 1,
+          "报修": 2
+        }
+      },
+      {
+        "no": 38,
+        "n_ok": true,
+        "cost": 2.624,
+        "pred_types": {
+          "走访": 1,
+          "报修": 1
+        },
+        "exp_types": {
+          "走访": 1,
+          "报修": 1
+        }
+      },
+      {
+        "no": 39,
+        "n_ok": true,
+        "cost": 1.964,
+        "pred_types": {
+          "调解": 1,
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "调解": 1,
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 40,
+        "n_ok": true,
+        "cost": 1.886,
+        "pred_types": {
+          "其他": 1,
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "其他": 1,
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 41,
+        "n_ok": true,
+        "cost": 0.922,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 42,
+        "n_ok": true,
+        "cost": 0.977,
+        "pred_types": {
+          "调解": 1
+        },
+        "exp_types": {
+          "调解": 1
+        }
+      },
+      {
+        "no": 43,
+        "n_ok": true,
+        "cost": 1.023,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      }
+    ],
+    "think": [
+      {
+        "no": 1,
+        "n_ok": true,
+        "cost": 7.354,
+        "pred_types": {
+          "报修": 1
+        },
+        "exp_types": {
+          "报修": 1
+        }
+      },
+      {
+        "no": 9,
+        "n_ok": true,
+        "cost": 6.521,
+        "pred_types": {
+          "人口变动": 1
+        },
+        "exp_types": {
+          "人口变动": 1
+        }
+      },
+      {
+        "no": 14,
+        "n_ok": true,
+        "cost": 10.782,
+        "pred_types": {
+          "走访": 1
+        },
+        "exp_types": {
+          "走访": 1
+        }
+      },
+      {
+        "no": 27,
+        "n_ok": false,
+        "cost": 18.973,
+        "pred_types": {
+          "人口变动": 1,
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 35,
+        "n_ok": true,
+        "cost": 27.022,
+        "pred_types": {
+          "报修": 2
+        },
+        "exp_types": {
+          "报修": 2
+        }
+      },
+      {
+        "no": 36,
+        "n_ok": true,
+        "cost": 9.192,
+        "pred_types": {
+          "人口变动": 1,
+          "报修": 1
+        },
+        "exp_types": {
+          "人口变动": 1,
+          "报修": 1
+        }
+      },
+      {
+        "no": 37,
+        "n_ok": true,
+        "cost": 13.789,
+        "pred_types": {
+          "人口变动": 1,
+          "报修": 2
+        },
+        "exp_types": {
+          "人口变动": 1,
+          "报修": 2
+        }
+      },
+      {
+        "no": 38,
+        "n_ok": true,
+        "cost": 9.292,
+        "pred_types": {
+          "走访": 1,
+          "报修": 1
+        },
+        "exp_types": {
+          "走访": 1,
+          "报修": 1
+        }
+      },
+      {
+        "no": 39,
+        "n_ok": true,
+        "cost": 9.253,
+        "pred_types": {
+          "调解": 1,
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "调解": 1,
+          "隐患排查": 1
+        }
+      },
+      {
+        "no": 40,
+        "n_ok": true,
+        "cost": 11.235,
+        "pred_types": {
+          "其他": 1,
+          "隐患排查": 1
+        },
+        "exp_types": {
+          "其他": 1,
+          "隐患排查": 1
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}发文台 · 极简减负平台{% endblock %}
+{% block page_title %}发文台{% endblock %}
+{% block page_sub %}
+拟稿 → 核稿 → 签发 → 用印 → 分发 → 归档；上行文必须有签发人，密级决定谁能看
+{% endblock %}
+
+{% block content %}
+<a class="card stat stat-link col-3" href="{{ url_for('views.docs') }}?status=draft">
+  <div class="ic" style="background:#e8eefb">✍️</div>
+  <div><div class="num" id="cDraft">-</div><div class="lbl">待拟稿</div></div>
+</a>
+<a class="card stat stat-link col-3" href="{{ url_for('views.docs') }}?status=signed">
+  <div class="ic" style="background:#fdf1e3">🖊️</div>
+  <div><div class="num" id="cPend" style="color:var(--orange,#c47d0a)">-</div><div class="lbl">待签发 / 用印</div></div>
+</a>
+<a class="card stat stat-link col-3" href="{{ url_for('views.docs') }}?status=sent">
+  <div class="ic" style="background:#e0f5ea">📤</div>
+  <div><div class="num" id="cSent">-</div><div class="lbl">已分发</div></div>
+</a>
+<a class="card stat stat-link col-3" href="{{ url_for('views.docs') }}?status=archived">
+  <div class="ic" style="background:#eef1f6">🗄️</div>
+  <div><div class="num" id="cArch">-</div><div class="lbl">已归档</div></div>
+</a>
+
+<div class="card col-12">
+  <div class="card-h">
+    <h2>📄 公文台账</h2>
+    <span class="hint">发文与通知公告分表管理：公文有文号、签发人、密级，公告是给居民看的</span>
+    {% if can('doc.manage') %}
+    <button class="btn btn-primary" style="margin-left:auto" id="btnNew">+ 拟稿</button>
+    {% endif %}
+  </div>
+  <div class="card-b">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding-bottom:12px">
+      <select class="inp" id="fStatus" style="width:150px">
+        <option value="">全部状态</option>
+        <option value="draft">待拟稿</option>
+        <option value="checked">已核稿</option>
+        <option value="signed">已签发</option>
+        <option value="sealed">已用印</option>
+        <option value="sent">已分发</option>
+        <option value="archived">已归档</option>
+      </select>
+      <input class="inp" id="fKw" placeholder="搜索标题 / 文号 / 主送" style="width:260px">
+      <button class="btn btn-ghost" id="btnSearch">查询</button>
+      <span style="margin-left:auto;font-size:12px;color:var(--muted)" id="pgInfo"></span>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th style="width:150px">文号</th>
+          <th>标题</th>
+          <th style="width:70px">文种</th>
+          <th style="width:90px">密级</th>
+          <th style="width:150px">主送</th>
+          <th style="width:100px">状态</th>
+          <th style="width:120px">拟稿时间</th>
+        </tr></thead>
+        <tbody id="tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted)">加载中…</td></tr></tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:12px">
+      <button class="btn btn-ghost" id="pgPrev" style="padding:4px 14px;font-size:12px">上一页</button>
+      <button class="btn btn-ghost" id="pgNext" style="padding:4px 14px;font-size:12px">下一页</button>
+    </div>
+  </div>
+</div>
+
+{% if can('doc.manage') %}
+<div class="modal" id="mNew" onclick="if(event.target===this)closeNew()">
+  <div class="modal-box" style="max-width:760px">
+    <div class="modal-h"><h3>拟稿</h3><span class="x" onclick="closeNew()">✕</span></div>
+    <div class="modal-body" style="padding:18px 20px;overflow:auto">
+      <div class="fgrid fgrid-21">
+        <div class="field"><label>文种 <span style="color:#c0392b">*</span></label>
+          <select class="inp" id="nType">
+            <option value="通知">通知（下行）</option>
+            <option value="请示">请示（上行）</option>
+            <option value="报告">报告（上行）</option>
+            <option value="函">函（平行）</option>
+            <option value="通报">通报（下行）</option>
+            <option value="纪要">纪要（内部）</option>
+          </select></div>
+        <div class="field"><label>密级标识</label>
+          <select class="inp" id="nSecret">
+            <option value="">未标</option>
+            <option value="公开">公开</option>
+            <option value="内部" selected>内部</option>
+            <option value="内部·敏感">内部·敏感（含居民个人信息）</option>
+          </select></div>
+        <div class="field"><label>紧急程度</label>
+          <select class="inp" id="nUrgency">
+            <option>平件</option><option>急件</option><option>特急</option>
+          </select></div>
+        <div class="field"><label>签发人 <span style="color:#c0392b">*</span></label>
+          <input class="inp" id="nSigner" placeholder="主任 / 书记姓名"></div>
+        <div class="field"><label>主送机关</label>
+          <input class="inp" id="nTo" placeholder="幸福里街道办事处"></div>
+        <div class="field"><label>抄送机关</label>
+          <input class="inp" id="nCc" placeholder="留空可不填"></div>
+      </div>
+      <div class="field"><label>标题 <span style="color:#c0392b">*</span></label>
+        <input class="inp" id="nTitle" placeholder="关于申请增补老旧小区消防设施的请示"></div>
+      <div class="field"><label>正文 <span style="color:#c0392b">*</span>
+        <span style="color:var(--muted);font-weight:400">支持 Markdown；请示要一文一事</span></label>
+        <textarea class="inp" id="nBody" rows="9" style="font-family:inherit;line-height:1.8"
+          placeholder="街道办事处：&#10;&#10;我社区 3 栋高层住宅消防栓压力不足……&#10;&#10;妥否，请批示。"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="closeNew()">取消</button>
+        <button class="btn btn-primary" id="btnSave">保存草稿</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<style>
+.modal{display:none;position:fixed;inset:0;background:rgba(16,28,44,.42);z-index:99;
+  align-items:center;justify-content:center;padding:20px}
+.modal.show{display:flex}
+.modal-box{background:#fff;border-radius:12px;width:100%;max-height:88vh;display:flex;flex-direction:column}
+.modal-h{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;
+  border-bottom:1px solid var(--border)}
+.modal-h h3{font-size:15px}
+.modal-h .x{cursor:pointer;color:var(--muted);font-size:15px;padding:2px 6px}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var st = new URLSearchParams(location.search).get('status') || '';
+  var page = 1, pages = 1;
+  var $ = function (id) { return document.getElementById(id); };
+  var fStatus = $('fStatus');
+  if (fStatus && st) fStatus.value = st;
+
+  var SECRET_COLOR = {'公开': '#0f6e56', '内部': '#185fa5', '内部·敏感': '#a32d2d',
+                      '秘密': '#a32d2d', '机密': '#791f1f'};
+
+  function badge(n) {
+    return '<span title="密级标识（社区无定密权，秘密/机密只能继承上级来文）" ' +
+      'style="font-size:11px;padding:1px 6px;border-radius:4px;border:1px solid currentColor;' +
+      'color:' + (SECRET_COLOR[n.secret_level] || '#888780') + '">' +
+      esc(n.secret_level || '未标') + '</span>';
+  }
+
+  function load() {
+    var q = new URLSearchParams();
+    q.set('page', page);
+    if (fStatus.value) q.set('status', fStatus.value);
+    var kw = $('fKw').value.trim();
+    if (kw) q.set('q', kw);
+    window.api('/api/docs?' + q.toString()).then(function (j) {
+      if (j.code !== 0) { alert(j.msg); return; }
+      var d = j.data, rows = d.items;
+      $('cDraft').textContent = d.counts.draft || 0;
+      $('cPend').textContent = d.counts.pending || 0;
+      var sent = 0, arch = 0;
+      rows.forEach(function (n) { if (n.doc_status === 'sent') sent++; if (n.doc_status === 'archived') arch++; });
+      $('cSent').textContent = sent;
+      $('cArch').textContent = arch;
+      pages = d.counts.pages || 1;
+      $('pgInfo').textContent = '共 ' + d.counts.total + ' 条 · 第 ' + page + '/' + pages + ' 页';
+      var tb = $('tbody');
+      if (!rows.length) {
+        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">暂无公文，点右上角「拟稿」开始</td></tr>';
+        return;
+      }
+      tb.innerHTML = rows.map(function (n) {
+        return '<tr>' +
+          '<td>' + (n.doc_no ? '<a href="/docs/' + n.id + '">' + esc(n.doc_no) + '</a>'
+                            : '<span style="color:var(--muted)">待编号</span>') + '</td>' +
+          '<td><a href="/docs/' + n.id + '">' + esc(n.title) + '</a>' +
+            (n.urgency !== '平件' ? ' <span style="color:#a32d2d;font-size:11px">' + esc(n.urgency) + '</span>' : '') +
+          '</td>' +
+          '<td>' + esc(n.doc_type) + '</td>' +
+          '<td>' + badge(n) + '</td>' +
+          '<td>' + esc(n.to_org || '—') + '</td>' +
+          '<td>' + esc(n.status_label) + '</td>' +
+          '<td style="font-size:12px;color:var(--muted)">' + esc(n.created_at) + '</td>' +
+        '</tr>';
+      }).join('');
+    });
+  }
+
+  $('btnSearch').onclick = function () { page = 1; load(); };
+  if (fStatus) fStatus.onchange = function () { page = 1; load(); };
+  $('pgPrev').onclick = function () { if (page > 1) { page--; load(); } };
+  $('pgNext').onclick = function () { if (page < pages) { page++; load(); } };
+
+  var mNew = $('mNew');
+  window.closeNew = function () { mNew.classList.remove('show'); };
+  if ($('btnNew')) {
+    $('btnNew').onclick = function () { mNew.classList.add('show'); };
+  }
+  if ($('btnSave')) {
+    $('btnSave').onclick = function () {
+      var body = {
+        doc_type: $('nType').value,
+        secret_level: $('nSecret').value,
+        urgency: $('nUrgency').value,
+        signer: $('nSigner').value.trim(),
+        to_org: $('nTo').value.trim(),
+        cc_org: $('nCc').value.trim(),
+        title: $('nTitle').value.trim(),
+        body_md: $('nBody').value.trim()
+      };
+      if (!body.title) { alert('标题不能为空'); return; }
+      if (!body.body_md) { alert('正文不能为空'); return; }
+      var btn = this; btn.disabled = true;
+      window.api('/api/docs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(function (j) {
+        btn.disabled = false;
+        if (j.code !== 0) { alert(j.msg); return; }
+        location.href = '/docs/' + j.data.id;
+      }).catch(function () { btn.disabled = false; });
+    };
+  }
+  load();
+})();
+</script>
+{% endblock %}

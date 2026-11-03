@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}用户与权限 · 极简减负平台{% endblock %}
+{% block page_title %}用户与权限{% endblock %}
+{% block page_sub %}角色给默认权限，管理员可按人增减 · 所有变更写入审计{% endblock %}
+
+{% block content %}
+<div class="card stat col-3">
+  <div class="ic" style="background:#e3edfb">👥</div>
+  <div><div class="num">{{ counts.total }}</div><div class="lbl">账号总数</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#fff4e0">⏳</div>
+  <div><div class="num" style="color:#b37700">{{ counts.pending }}</div><div class="lbl">待审核</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#e0f5ea">✅</div>
+  <div><div class="num" style="color:#1e8e5a">{{ counts.active }}</div><div class="lbl">正常使用</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#fbe4e4">🚫</div>
+  <div><div class="num" style="color:#c0392b">{{ counts.disabled }}</div><div class="lbl">已停用</div></div>
+</div>
+
+<div class="card col-12">
+  <div class="card-h">
+    <h2>🔑 账号清单</h2>
+    <div style="display:flex;gap:8px;">
+      {% set cur = request.args.get('status','') %}
+      <a class="btn {{ 'btn-primary' if not cur else 'btn-ghost' }}" style="padding:4px 14px;font-size:12px"
+         href="{{ url_for('admin.users') }}">全部</a>
+      <a class="btn {{ 'btn-primary' if cur=='pending' else 'btn-ghost' }}" style="padding:4px 14px;font-size:12px"
+         href="{{ url_for('admin.users', status='pending') }}">待审核 {{ counts.pending }}</a>
+      <a class="btn {{ 'btn-primary' if cur=='active' else 'btn-ghost' }}" style="padding:4px 14px;font-size:12px"
+         href="{{ url_for('admin.users', status='active') }}">正常</a>
+      <a class="btn {{ 'btn-primary' if cur=='disabled' else 'btn-ghost' }}" style="padding:4px 14px;font-size:12px"
+         href="{{ url_for('admin.users', status='disabled') }}">已停用</a>
+    </div>
+  </div>
+  <div class="tw">
+    <table>
+      <thead><tr>
+        <th>账号</th><th>姓名</th><th>角色</th><th>所属单位</th>
+        <th>状态</th><th>权限</th><th>最后登录</th><th>操作</th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        {% set st = r.status or 'active' %}
+        <tr>
+          <td style="font-family:Consolas,monospace">{{ r.username }}</td>
+          <td>{{ r.name }}</td>
+          <td><span class="role-chip r-{{ r.role }}">{{ role_name(r.role) }}</span></td>
+          <td>{{ r.org }}</td>
+          <td>
+            {% if st == 'pending' %}<span class="badge b-orange">待审核</span>
+            {% elif st == 'disabled' %}<span class="badge b-gray">已停用</span>
+            {% else %}<span class="badge b-blue">正常</span>{% endif %}
+          </td>
+          <td style="font-size:12px">
+            {% if r.role == 'admin' %}
+              <b>{{ perms_of(r)|length }}</b> 项<span style="color:var(--muted)">（全权）</span>
+            {% elif perms_of(r)|length == 0 and st == 'active' %}
+              <span class="badge b-orange" title="账号可用但没有任何业务权限">未授权</span>
+            {% elif (r.perms_json is none) %}
+              <b>{{ perms_of(r)|length }}</b> 项<span style="color:var(--muted)">（跟随角色）</span>
+            {% else %}
+              <b>{{ perms_of(r)|length }}</b> 项<span style="color:var(--muted)">（已自定义）</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;color:var(--muted)">
+            {{ r.last_login_at.strftime('%m-%d %H:%M') if r.last_login_at else '从未登录' }}
+          </td>
+          <td>
+            <a class="btn btn-ghost" style="padding:4px 12px;font-size:12px"
+               href="{{ url_for('admin.user_detail', uid=r.id, back=request.full_path.rstrip('?&')) }}">
+              {{ '审核' if st == 'pending' else '管理' }}
+            </a>
+          </td>
+        </tr>
+      {% endfor %}
+      {% if not rows %}
+        <tr><td colspan="8" style="text-align:center;color:var(--muted)">暂无账号</td></tr>
+      {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card col-12">
+  <div class="card-h">
+    <h2>➕ 新建账号</h2>
+    <span class="hint">上级单位、物业这类不会自己来注册的账号，由管理员直接建，建完即可登录</span>
+    <button class="btn btn-ghost" style="margin-left:auto" id="btnToggleNew">展开</button>
+  </div>
+  <div class="card-b" id="newForm" style="display:none">
+    <div class="fgrid fgrid-3">
+      <div class="field"><label>登录账号 <span style="color:#c0392b">*</span></label>
+        <input class="inp" id="nUser" placeholder="jiedao2 / minzheng"></div>
+      <div class="field"><label>姓名 <span style="color:#c0392b">*</span></label>
+        <input class="inp" id="nName" placeholder="李主任"></div>
+      <div class="field"><label>所属单位 <span style="color:#c0392b">*</span></label>
+        <input class="inp" id="nOrg" placeholder="和平街道办事处"></div>
+      <div class="field"><label>角色 <span style="color:#c0392b">*</span></label>
+        <select class="inp" id="nRole">
+          {% for k, v in role_names.items() if k != 'resident' %}
+          <option value="{{ k }}" {{ 'selected' if k == 'community' }}>{{ v }}</option>
+          {% endfor %}
+        </select></div>
+      <div class="field"><label>初始密码 <span style="color:#c0392b">*</span></label>
+        <input class="inp" id="nPwd" placeholder="至少 8 位，建完线下告知本人"></div>
+      <div class="field"><label>联系电话</label>
+        <input class="inp" id="nPhone" placeholder="选填，仅供核实"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:14px;margin:16px 0 10px">
+      <b style="font-size:13px;color:#12263f">权限点</b>
+      <span style="font-size:12px;color:#8ba0b8">
+        切换角色会自动预选该角色的默认权限，之后可以按人增减
+      </span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#41556f;cursor:pointer;margin-left:auto">
+        <input type="checkbox" id="nFollow" checked onchange="newToggleFollow()"> 跟随角色默认
+      </label>
+      <span style="font-size:12px;color:#8ba0b8" id="nPermCount"></span>
+    </div>
+
+    <div class="pgrid">
+      {% for gname, items in groups %}
+      <div class="pgroup">
+        <div class="pgtitle">{{ gname }}</div>
+        {% for p in items %}
+        <label class="pitem">
+          <input type="checkbox" class="nperm" value="{{ p }}" disabled>
+          <span><b>{{ perms[p] }}</b><small>{{ p }}</small></span>
+        </label>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:18px;align-items:center">
+      <button class="btn btn-primary" id="btnCreate">创建账号</button>
+      <span style="font-size:12px;color:#8ba0b8" id="newTip"></span>
+    </div>
+  </div>
+</div>
+
+<div class="card col-12">
+  <div class="card-h"><h2>📌 这套权限怎么运作</h2></div>
+  <div class="card-b" style="font-size:13px;line-height:1.9;color:#41556f">
+    <p><b>① 角色只提供默认值。</b>新同事自助注册后是「社区工作者 · 待审核 · 零权限」，
+       一个字的事都办不了，直到管理员审核并勾选权限。</p>
+    <p><b>② 按人授权优先于角色。</b>同一个「社区工作者」，可以让 A 只管首录、让 B 只管公告。
+       取消勾选即为降权，不需要为一个人新建角色。</p>
+    <p><b>③ 权限实时生效。</b>管理员点保存后，对方下一次点击就按新权限判断，
+       既不用重启，也不用重新登录。</p>
+    <p><b>④ 管理员不可被锁死。</b>系统拒绝"停用自己""取消自己的管理员角色"
+       以及"停掉最后一个可用管理员"，避免把后台彻底锁在门外。</p>
+    <p><b>⑤ 上级单位也是普通账号。</b>街道用「街道」角色，权限是
+       <code>notice.import</code>（发文/投递）+ <code>task.manage</code>（下任务）
+       + 报表与审计只读，共 {{ role_perms['street']|length }} 项。
+       它<strong>没有</strong> <code>notice.receive</code> / <code>notice.localize</code>——
+       上级只发文和督办，不替社区签收、不替社区办文，否则监督者和执行者就合并了。</p>
+  </div>
+</div>
+
+<style>
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.pgroup{border:1px solid #e8eef7;border-radius:10px;padding:11px 13px;background:#fbfdff}
+.pgtitle{font-size:12px;font-weight:700;color:#206bc4;margin-bottom:8px;letter-spacing:.02em}
+.pitem{display:flex;gap:8px;align-items:flex-start;padding:5px 0;cursor:pointer}
+.pitem input{margin-top:3px;width:15px;height:15px;flex:0 0 auto}
+.pitem b{display:block;font-size:12.5px;font-weight:500;color:#12263f;line-height:1.4}
+.pitem small{display:block;font-size:11px;color:#9aabbd;font-family:Consolas,monospace}
+.pitem input:disabled + span b{color:#9aabbd}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ROLE_PERMS = {{ role_perms_json|tojson }};
+const ALL_PERMS = {{ perms|length }};
+
+function newChecked() {
+  return Array.from(document.querySelectorAll('.nperm:checked')).map(x => x.value);
+}
+function newCount() {
+  const n = newChecked().length;
+  document.getElementById('nPermCount').textContent = '已选 ' + n + ' / ' + ALL_PERMS + ' 项';
+}
+function newApplyRole() {
+  const role = document.getElementById('nRole').value;
+  const def = ROLE_PERMS[role] || [];
+  document.querySelectorAll('.nperm').forEach(x => { x.checked = def.includes(x.value); });
+  newCount();
+}
+function newToggleFollow() {
+  const follow = document.getElementById('nFollow').checked;
+  document.querySelectorAll('.nperm').forEach(x => { x.disabled = follow; });
+  if (follow) newApplyRole();
+  newCount();
+}
+function newTip(msg, bad) {
+  const el = document.getElementById('newTip');
+  el.textContent = msg;
+  el.style.color = bad ? '#c0392b' : '#1e8e5a';
+}
+
+document.getElementById('nRole').addEventListener('change', function () {
+  // 换角色就重选默认值，但只在"跟随角色"模式下自动改，
+  // 已经手工精调过的不动，免得管理员白点一遍
+  if (document.getElementById('nFollow').checked) newApplyRole();
+});
+document.getElementById('btnToggleNew').addEventListener('click', function () {
+  const f = document.getElementById('newForm');
+  const open = f.style.display === 'none';
+  f.style.display = open ? '' : 'none';
+  this.textContent = open ? '收起' : '展开';
+  if (open) newApplyRole();
+});
+document.getElementById('btnCreate').addEventListener('click', async function () {
+  const role = document.getElementById('nRole').value;
+  const follow = document.getElementById('nFollow').checked;
+  const picked = newChecked();
+  const def = ROLE_PERMS[role] || [];
+  // 勾选与角色默认完全一致时传 null，库里就记成"跟随角色"；
+  // 一旦有增减就按人存，列表里会显示"已自定义"
+  const same = picked.length === def.length && picked.every(p => def.includes(p));
+  const body = {
+    username: document.getElementById('nUser').value.trim(),
+    name: document.getElementById('nName').value.trim(),
+    org: document.getElementById('nOrg').value.trim(),
+    phone: document.getElementById('nPhone').value.trim(),
+    role: role,
+    password: document.getElementById('nPwd').value,
+    perms: (follow || same) ? null : picked
+  };
+  this.disabled = true;
+  try {
+    const j = await api('/api/admin/users', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (j.code !== 0) throw new Error(j.msg);
+    alert('已创建 ' + j.data.username + '（' + j.data.role_cn + '·' + j.data.org +
+          '），生效 ' + j.data.perm_count + ' 项权限。');
+    location.reload();
+  } catch (e) {
+    newTip('创建失败：' + e.message, true);
+  } finally { this.disabled = false; }
+});
+
+newCount();
+</script>
+{% endblock %}

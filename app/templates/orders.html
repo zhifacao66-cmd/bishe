@@ -1,0 +1,537 @@
+{% extends "base.html" %}
+{% block title %}物业工单 · 极简减负平台{% endblock %}
+{% block page_title %}物业工单中心{% endblock %}
+{% block page_sub %}派单 → 接单 → 办结 · 每一步都记名 · 工单已脱敏{% endblock %}
+
+{% block content %}
+<style>
+  /* 流转记录弹窗与知识库那边保持同一套视觉，避免两页各长一个样 */
+  .modal{display:none;position:fixed;inset:0;background:rgba(16,28,44,.42);z-index:99;
+    align-items:center;justify-content:center;padding:24px;}
+  .modal.show{display:flex;}
+  .modal-box{background:#fff;border-radius:12px;width:100%;max-width:640px;max-height:82vh;
+    display:flex;flex-direction:column;overflow:hidden;box-shadow:0 16px 48px rgba(16,28,44,.22);}
+  .modal-h{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;
+    border-bottom:1px solid var(--border);}
+  .modal-h h3{font-size:15px;}
+  .modal-h .x{cursor:pointer;color:var(--muted);font-size:15px;padding:2px 6px;}
+  .modal-meta{padding:10px 20px;font-size:12.5px;color:var(--muted);background:#fafbfd;
+    border-bottom:1px solid var(--border);line-height:1.7;}
+  .modal-body{padding:18px 20px;overflow:auto;font-size:13px;}
+  .modal-f{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;
+    justify-content:flex-end;background:#fafbfd;}
+  /* 时间线 */
+  .tl{position:relative;padding-left:20px;}
+  .tl:before{content:'';position:absolute;left:5px;top:8px;bottom:8px;width:2px;background:#e7ecf3;}
+  .tl-item{position:relative;padding-bottom:16px;}
+  .tl-item:last-child{padding-bottom:0;}
+  .tl-dot{position:absolute;left:-19px;top:4px;width:10px;height:10px;border-radius:50%;
+    background:#fff;border:2px solid #b9d3f2;}
+  .tl-item.now .tl-dot{border-color:#2fb344;background:#e9f8ee;}
+  .tl-h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;}
+  .tl-h b{font-size:13px;}
+  .tl-h time{font-size:11.5px;color:var(--muted);font-family:Consolas,monospace;}
+  .tl-who{font-size:12px;color:#4a5b70;margin-top:2px;}
+  .tl-detail{font-size:12.5px;color:#3b4a5e;margin-top:4px;background:#f7f9fc;
+    border-radius:7px;padding:7px 10px;line-height:1.65;white-space:pre-wrap;}
+  .mini{font-size:11.5px;border:1px solid var(--border);background:#fff;border-radius:6px;
+    padding:4px 10px;cursor:pointer;color:#4a5b70;font-family:inherit;white-space:nowrap;}
+  .mini:hover{border-color:#b9d3f2;color:#206bc4;}
+  .mini.pri{background:#1e5eff;border-color:#1e5eff;color:#fff;}
+  .mini.pri:hover{background:#1a52e0;color:#fff;}
+  .no-link{color:var(--muted);font-size:12px;}
+  .ono{font-family:Consolas,monospace;font-size:12px;color:#206bc4;cursor:pointer;
+    border-bottom:1px dashed #b9d3f2;}
+  .ono:hover{color:#1a52e0;border-bottom-color:#1a52e0;}
+  .who{font-size:12.5px;}
+  .who small{display:block;font-size:11px;color:var(--muted);margin-top:1px;}
+</style>
+
+<!-- 统计 -->
+<div class="card stat col-3">
+  <div class="ic" style="background:#e3edfb">📤</div>
+  <div><div class="num" id="cOpen">-</div><div class="lbl">待接单</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#fdf0d7">🔧</div>
+  <div><div class="num" id="cDoing">-</div><div class="lbl">处理中</div></div>
+</div>
+<div class="card stat col-3">
+  <div class="ic" style="background:#e0f5ea">✅</div>
+  <div><div class="num" id="cDone">-</div><div class="lbl">已完成</div></div>
+</div>
+<!-- 居民不服单独一张卡：它和"超时"是两种不同的失败。
+     超时是"慢了"，不服是"办了但不认"。混在一个数里，居委会分不清该催谁。 -->
+<div class="card stat col-3">
+  <div class="ic" style="background:#fdeaea">⚖️</div>
+  <div><div class="num" id="cDispute">-</div><div class="lbl">待裁决</div></div>
+</div>
+
+<!-- 超时告警条 -->
+<div class="col-12" id="alertBar" style="display:none">
+  <div style="background:#fdf1f1;border:1px solid #f3c1c1;border-radius:10px;padding:12px 16px;font-size:13px;color:#b03131;">
+    <b>🚨 督办Agent 告警：</b><span id="alertText"></span>
+  </div>
+</div>
+
+<!-- 工单列表 -->
+<div class="card col-12">
+  <div class="card-h">
+    <h2>📤 工单列表</h2>
+    <span class="hint">
+      {% if current_user.role == 'property' %}当前视角：{{ current_user.org }}
+      {% else %}{{ role_name(current_user.role) }}监督视角 · 全部单位工单{% endif %}
+      （仅可见脱敏后工单内容）
+      <span id="truncHint"></span>
+    </span>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:0 0 12px">
+    <input id="q" class="fde-input" placeholder="搜索工单号 / 内容 / 单位 / 处理人（空格分隔多个词）"
+           style="min-height:0;height:34px;width:250px;padding:6px 12px;font-size:13px">
+    <div id="stFilter" style="display:flex;gap:6px"></div>
+    <span id="matchHint" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+  <div class="tw">
+    <table>
+      <thead><tr>
+        <th>工单号</th><th>内容（脱敏）</th><th>时限</th><th>处理人</th><th>创建时间</th><th>状态</th><th>反馈</th><th style="width:190px">操作</th>
+      </tr></thead>
+      <tbody id="tbody"><tr><td colspan="8" style="text-align:center;color:var(--muted)">加载中…</td></tr></tbody>
+    </table>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;padding-top:12px">
+    <button id="pgPrev" class="btn btn-ghost" style="padding:4px 14px;font-size:12px">上一页</button>
+    <span id="pgInfo" style="font-size:12px;color:var(--muted)">-</span>
+    <button id="pgNext" class="btn btn-ghost" style="padding:4px 14px;font-size:12px">下一页</button>
+  </div>
+</div>
+
+<!-- 流转记录 -->
+<div class="modal" id="flowModal">
+  <div class="modal-box">
+    <div class="modal-h">
+      <h3 id="fmTitle">流转记录</h3>
+      <span class="x" onclick="closeModal('flowModal')">✕</span>
+    </div>
+    <div class="modal-meta" id="fmMeta"></div>
+    <div class="modal-body" id="fmBody"></div>
+    <div class="modal-f">
+      <span id="fmFoot" style="margin-right:auto"></span>
+      <button class="btn btn-ghost" style="padding:6px 16px;font-size:12.5px"
+              onclick="closeModal('flowModal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 裁决 -->
+<div class="modal" id="jdModal">
+  <div class="modal-box" style="max-width:560px">
+    <div class="modal-h">
+      <h3>裁决争议</h3>
+      <span class="x" onclick="closeModal('jdModal')">✕</span>
+    </div>
+    <div class="modal-meta" id="jdMeta"></div>
+    <div class="modal-body">
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:6px">争议类型</div>
+      <div id="jdTypes" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:6px">裁决结论</div>
+      <div id="jdVerdicts" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div style="font-size:12.5px;color:var(--muted);margin:14px 0 6px">
+        裁决依据（必填，不少于 8 字）</div>
+      <textarea id="jdBasis" class="fde-input" style="min-height:70px;font-size:13px"
+        placeholder="例：物业服务合同第 3 条约定公共部位渗漏由物业维修"></textarea>
+      <div style="font-size:12.5px;color:var(--muted);margin:12px 0 6px">处理要求（选填）</div>
+      <input id="jdNote" class="fde-input" style="min-height:0;height:34px;font-size:13px"
+        placeholder="例：48 小时内返工并留影像">
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-ghost" onclick="closeModal('jdModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitJudge()">提交裁决</button>
+    </div>
+  </div>
+</div>
+
+<!-- 转派 -->
+<div class="modal" id="tfModal">
+  <div class="modal-box" style="max-width:460px">
+    <div class="modal-h">
+      <h3>转派工单</h3>
+      <span class="x" onclick="closeModal('tfModal')">✕</span>
+    </div>
+    <div class="modal-meta" id="tfMeta"></div>
+    <div class="modal-body">
+      <label style="font-size:12.5px;color:#4a5b70">转给</label>
+      <select id="tfTo" class="fde-input" style="width:100%;margin:6px 0 14px;height:36px"></select>
+      <label style="font-size:12.5px;color:#4a5b70">说明（可选，会写进流转记录）</label>
+      <input id="tfNote" class="fde-input" maxlength="200" placeholder="如：请假交接 / 非本工种"
+             style="width:100%;margin-top:6px;height:36px">
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-ghost" style="padding:6px 16px;font-size:12.5px"
+              onclick="closeModal('tfModal')">取消</button>
+      <button class="btn btn-primary" style="padding:6px 16px;font-size:12.5px"
+              onclick="submitTransfer()">确认转派</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const STATUS = {
+  open:  ['b-blue','待接单'],
+  doing: ['b-orange','处理中'],
+  done:  ['b-green','已完成'],
+};
+// 权限在渲染时定一次，不放在每一行的 map 里反复算
+const CAN_HANDLE = {{ 'true' if can('order.handle') else 'false' }};
+const CAN_JUDGE  = {{ 'true' if can('order.verdict') else 'false' }};
+
+// 筛选/分页状态放 URL，不放 JS 变量：一离开页面再回来条件就没了，
+// 从详情返回时也接不上"我当时在筛哪一类"。切筛选用 replaceState 不堆历史。
+const S = { page: 1, status: '', q: '' };
+// 当前这一页的数据。转派要知道"这单现在归谁"，用它查比往 onclick 里
+// 拼姓名字符串安全（姓名里有引号就会把整段 JS 弄坏）。
+let CUR = [];
+(function initFromUrl(){
+  const u = new URL(location.href);
+  S.page = Math.max(1, parseInt(u.searchParams.get('page') || '1', 10) || 1);
+  S.status = u.searchParams.get('status') || '';
+  S.q = u.searchParams.get('q') || '';
+  document.getElementById('q').value = S.q;
+})();
+function syncUrl(){
+  const u = new URL(location.href);
+  if(S.page > 1) u.searchParams.set('page', S.page); else u.searchParams.delete('page');
+  if(S.status) u.searchParams.set('status', S.status); else u.searchParams.delete('status');
+  if(S.q) u.searchParams.set('q', S.q); else u.searchParams.delete('q');
+  history.replaceState(null, '', u);
+}
+const CHIPS = [['','全部'],['open','待接单'],['doing','处理中'],['done','已完成']];
+function renderChips(){
+  const box = document.getElementById('stFilter');
+  box.innerHTML = CHIPS.map(([v,t]) =>
+    `<button class="btn btn-ghost" data-v="${v}" style="padding:4px 12px;font-size:12px;${
+      S.status === v ? 'background:#1e5eff;color:#fff;border-color:#1e5eff' : ''}">${t}</button>`
+  ).join('');
+  box.querySelectorAll('button').forEach(b => b.onclick = () => {
+    S.status = b.dataset.v; S.page = 1; syncUrl(); renderChips(); load();
+  });
+}
+
+// 转义统一用 base.html 的全局 esc()（含单引号，属性里也安全）
+
+async function load(){
+  const qs = new URLSearchParams({ limit: '50', page: String(S.page) });
+  if(S.status) qs.set('status', S.status);
+  if(S.q) qs.set('q', S.q);
+  const j = await api('/api/orders?' + qs);
+  const list = (j.data && j.data.items) || [];
+  CUR = list;
+  const c = (j.data && j.data.counts) || {};
+  // 卡片数字取服务端 count，不在这一屏里 filter().length ——
+  // 列表有 limit，数长度会把"库里有 23 件已完成"说成"16 件"。
+  // 而且服务端的 total 是"家底"，不随筛选变化，筛选只影响 matched。
+  document.getElementById('cOpen').textContent  = c.open ?? 0;
+  document.getElementById('cDoing').textContent = c.doing ?? 0;
+  document.getElementById('cDone').textContent  = c.done ?? 0;
+  document.getElementById('cDispute').textContent = c.disputed ?? 0;
+  document.getElementById('truncHint').textContent =
+    c.truncated ? `　显示第 ${c.page}/${c.pages} 页，共 ${c.matched} 条` : '';
+  document.getElementById('matchHint').textContent =
+    (S.status || S.q) ? `筛选出 ${c.matched} 条（总 ${c.total} 条）` : '';
+  document.getElementById('pgInfo').textContent = `${c.page || 1} / ${c.pages || 1}`;
+  document.getElementById('pgPrev').disabled = (c.page || 1) <= 1;
+  document.getElementById('pgNext').disabled = (c.page || 1) >= (c.pages || 1);
+  const tb = document.getElementById('tbody');
+  if(!list.length){
+    tb.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted)">${
+      (S.status || S.q) ? '没有符合条件的工单，换个关键词或状态试试' : '暂无工单，去 FDE 首录台提交一条报修试试'}</td></tr>`;
+    document.getElementById('alertBar').style.display = 'none';
+    return;
+  }
+  tb.innerHTML = list.map(o=>{
+    const [cls,txt] = STATUS[o.status];
+    let ops = '';
+    if(o.status === 'open'){
+      ops = CAN_HANDLE
+        ? `<button class="mini pri" onclick="accept(${o.id})">接单</button>`
+        : '<span class="no-link">待物业接单</span>';
+    } else if(o.status === 'doing'){
+      // 转派是"处理人"字段真正要解决的问题：换手之后要能查清是谁换给谁的
+      ops = CAN_HANDLE
+        ? `<button class="mini" onclick="openTransfer(${o.id})">转派</button>
+           <button class="mini pri" onclick="finish(${o.id})">提交反馈</button>`
+        : '<span class="no-link">处理中</span>';
+    } else {
+      ops = '<span class="no-link">已闭环</span>';
+    }
+    const od = o.overdue ? '<span class="badge b-red">已超时</span>' : '';
+    // SLA 分级取自知识库《物业报修响应时限与处置规范》：紧急4h / 较急24h / 一般72h
+    const LVC = {'紧急':'b-red','较急':'b-orange','一般':'b-gray'};
+    const lv = o.sla_level
+      ? `<span class="badge ${LVC[o.sla_level]||'b-gray'}" style="margin-left:0">${o.sla_level}</span>` : '';
+    // 处理人：没有就明说"未记录"，不留空白——空白会让人以为是页面没渲染出来。
+    const who = o.assignee
+      ? `<span class="who" title="接单时间 ${o.assigned_at || '未记录'}">${esc(o.assignee)}${
+          o.assigned_at ? `<small>${o.assigned_at}</small>` : ''}</span>`
+      : '<span class="no-link" title="历史工单未记录处理人">—</span>';
+    return `<tr ${o.overdue?'style="background:#fdf6f6"':''}>
+      <td><span class="ono" title="查看流转记录" onclick="openFlow(${o.id})">${o.order_no}</span></td>
+      <td>${esc(o.content)}</td>
+      <td style="white-space:nowrap">${lv}${o.sla_hours}h ${od}</td>
+      <td>${who}</td>
+      <td style="color:var(--muted);font-size:12px">${o.created_at}</td>
+      <td><span class="badge ${cls}">${txt}</span>${disputeTag(o)}</td>
+      <td style="font-size:12px;color:#3b4a5e">${esc(o.feedback) || '-'}</td>
+      <td>${ops}</td></tr>`;
+  }).join('');
+  // 督办告警：件数用服务端统计（列表可能被截断，只能给出看得见的那几单号）
+  const odList = list.filter(o=>o.overdue);
+  const bar = document.getElementById('alertBar');
+  const odCount = c.overdue ?? odList.length;
+  if(odCount){
+    bar.style.display='';
+    const nos = odList.slice(0,5).map(o=>o.order_no).join('、');
+    document.getElementById('alertText').textContent =
+      `${odCount} 个工单超时未办结${nos ? `（${nos}${odCount>odList.slice(0,5).length?' 等':''}）` : ''}，请尽快处理`;
+  } else bar.style.display='none';
+}
+
+/* 争议标记：把"居民不服""被驳回过"直接摊在列表上。
+   居委会扫一眼就知道哪几单要管，不用逐条点进详情。 */
+function disputeTag(o){
+  const t = [];
+  if(o.confirm_status === 'disputed'){
+    t.push(o.verdict
+      ? '<span class="badge b-gray">已裁决</span>'
+      : '<span class="badge b-red">居民不服</span>');
+  } else if(o.confirm_status === 'ok'){
+    t.push('<span class="badge b-gray">居民已确认</span>');
+  }
+  if(o.reject_count > 0){
+    t.push(`<span class="badge b-orange" title="被居委会驳回重办的次数">驳回${o.reject_count}次</span>`);
+  }
+  return t.join('');
+}
+
+/* ---------------- 流转记录 + 存证 + 裁决 ---------------- */
+const ACT_LABEL = {submit:'居民提交', attach:'上传附件', dispatch:'派单', accept:'接单',
+  transfer:'转派', finish:'办结', reject:'驳回重办', uphold:'维持办结',
+  confirm:'居民确认', dispute:'居民不服'};
+let FLOW = { id: null, data: null };
+
+async function openFlow(id){
+  // 业务详情和存证链并行拉：链是独立的一组读，串行没意义，
+  // 而且链读取失败不应该让整张详情打不开（所以给了默认值兜底）。
+  const [j, je] = await Promise.all([
+    api(`/api/orders/${id}`),
+    api(`/api/evidence/chain?type=order&id=${id}`).catch(() => ({ code: 1, data: null }))
+  ]);
+  if(j.code !== 0){ alert((j.data && j.data.msg) || j.msg); return; }
+  const d = j.data;
+  FLOW = { id, data: d };
+  document.getElementById('fmTitle').textContent = `${d.order_no} · 流转记录`;
+  const st = (STATUS[d.status] || ['b-gray', d.status])[1];
+
+  // 居民表态。**原话一定要显示**：裁决要看的正是"他说哪儿没修好"，
+  // 只给一个"居民不服"标签，居委会还得再打电话问一遍。
+  let disp = '';
+  if(d.confirm_status === 'disputed'){
+    disp = `<div style="margin-top:6px;color:#b03131">
+      <b>居民表示未解决</b>${d.confirm_note ? '：' + esc(d.confirm_note) : ''}
+      ${d.dispute_type_text ? `　<span class="badge b-red">${esc(d.dispute_type_text)}</span>` : ''}</div>`;
+  } else if(d.confirm_status === 'ok'){
+    disp = '<div style="margin-top:6px;color:#1a7f4b"><b>居民已确认解决</b></div>';
+  }
+  let vd = '';
+  if(d.verdict_text){
+    vd = `<div style="margin-top:6px;padding:8px 10px;background:#f7f8fb;border-radius:8px">
+      <b>裁决：${esc(d.verdict_text)}</b>
+      <div style="margin-top:3px">依据：${esc(d.verdict_basis) || '—'}</div>
+      <div style="color:var(--muted);font-size:12px;margin-top:3px">
+        ${esc(d.verdict_by)}　${esc(d.verdict_at)}</div></div>`;
+  }
+  document.getElementById('fmMeta').innerHTML =
+    `状态 <b style="color:#3b4a5e">${esc(st)}</b>　·　处理人 ${d.assignee ? esc(d.assignee) : '未记录'}
+     　·　时限 ${esc(d.sla_level) || '一般'} / ${esc(String(d.sla_hours))}h
+     ${d.handle_hours != null ? `　·　处理耗时 <b style="color:#3b4a5e">${esc(String(d.handle_hours))}h</b>` : ''}
+     ${d.reject_count > 0 ? `　·　<span style="color:#b03131">被驳回 ${esc(String(d.reject_count))} 次</span>` : ''}
+     <div style="margin-top:4px">${esc(d.content)}</div>${disp}${vd}`;
+
+  const ev = d.events || [];
+  const tl = ev.length ? ('<div class="tl">' + ev.map((e, i) =>
+    `<div class="tl-item ${i === ev.length - 1 ? 'now' : ''}">
+       <div class="tl-dot"></div>
+       <div class="tl-h"><b>${esc(e.label)}</b>
+         ${e.from_status && e.to_status && e.from_status !== e.to_status
+           ? `<span style="font-size:11px;color:var(--muted)">${esc(e.from_status)} → ${esc(e.to_status)}</span>` : ''}
+         <time>${esc(e.at)}</time></div>
+       <div class="tl-who">${esc(e.actor) || '系统'}${e.actor_org ? ' · ' + esc(e.actor_org) : ''}</div>
+       ${e.detail ? `<div class="tl-detail">${esc(e.detail)}</div>` : ''}
+     </div>`).join('') + '</div>')
+    : '<div style="color:var(--muted);line-height:1.9">这张单没有流转记录。</div>';
+
+  // 存证链：只显示序号 / 动作 / 时间 / 人 / 哈希前缀。
+  // 哈希截断成 16 位是刻意的——完整 64 位贴满屏没人看，而"能对上前 16 位"
+  // 已经足够说明问题；要比对完整值走 /api/evidence/verify。
+  const chain = (je && je.code === 0 && je.data && je.data.items) || [];
+  const chainHtml = chain.length
+    ? '<div class="tl" style="margin-top:6px">' + chain.map(r =>
+      `<div class="tl-item">
+         <div class="tl-dot"></div>
+         <div class="tl-h"><b>#${esc(String(r.seq))} ${esc(ACT_LABEL[r.action] || r.action)}</b>
+           <time>${esc(r.at)}</time></div>
+         <div class="tl-who">${esc(r.actor) || '系统'}
+           <code style="font-size:11px;color:var(--muted)">${esc(r.hash)}</code></div>
+         ${r.summary ? `<div class="tl-detail">${esc(r.summary)}</div>` : ''}
+       </div>`).join('') + '</div>'
+    : '<div style="color:var(--muted)">尚未产生存证记录（本功能上线前的历史单没有链）</div>';
+
+  document.getElementById('fmBody').innerHTML = tl +
+    `<div style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--border)">
+       <div style="font-size:12.5px;font-weight:500;margin-bottom:4px">🔗 证据链（哈希存证）</div>
+       <div style="font-size:12px;color:var(--muted);margin-bottom:8px">
+         每次流转都会追加一条，任何一条被改动都会让后续哈希对不上</div>
+       ${chainHtml}
+     </div>`;
+
+  document.getElementById('fmFoot').innerHTML =
+    (CAN_JUDGE && d.status === 'done' && d.confirm_status === 'disputed')
+      ? '<button class="btn btn-primary" style="padding:6px 16px;font-size:12.5px" onclick="openJudge()">⚖️ 裁决</button>'
+      : '';
+  document.getElementById('flowModal').classList.add('show');
+}
+
+/* ---------------- 裁决 ---------------- */
+let JD = { verdict: '', dispute: '' };
+async function openJudge(){
+  const d = FLOW.data;
+  if(!d) return;
+  const j = await api('/api/orders/arbitration');
+  if(j.code !== 0){ alert((j.data && j.data.msg) || j.msg); return; }
+  JD = { verdict: '', dispute: d.dispute_type || '' };
+  document.getElementById('jdMeta').innerHTML =
+    `${esc(d.order_no)}　·　居民原话：<b>${esc(d.confirm_note) || '（未填写）'}</b>
+     <div style="margin-top:3px">${esc(d.content)}</div>`;
+  const types = j.data.dispute_types || {};
+  document.getElementById('jdTypes').innerHTML = Object.entries(types).map(([k, v]) =>
+    `<span class="badge ${k === JD.dispute ? 'b-orange' : 'b-gray'}" style="cursor:pointer"
+       onclick="pickDispute('${esc(k)}', this)">${esc(v)}</span>`).join('');
+  const vs = j.data.verdicts || {};
+  document.getElementById('jdVerdicts').innerHTML = Object.entries(vs).map(([k, v]) =>
+    `<label style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;
+        border:1px solid var(--border);border-radius:8px;cursor:pointer">
+       <input type="radio" name="jdv" value="${esc(k)}" onchange="JD.verdict='${esc(k)}'">
+       <span><b>${esc(v.label)}</b>
+         <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(v.hint)}</div>
+         <div style="font-size:11.5px;color:${v.action === 'reject' ? '#b03131' : '#1a7f4b'};margin-top:2px">
+           ${v.action === 'reject' ? '→ 工单退回物业重办' : '→ 维持办结'}</div>
+       </span></label>`).join('');
+  document.getElementById('jdBasis').value = '';
+  document.getElementById('jdNote').value = '';
+  document.getElementById('jdModal').classList.add('show');
+}
+function pickDispute(k, el){
+  JD.dispute = k;
+  el.parentNode.querySelectorAll('.badge').forEach(b => b.className = 'badge b-gray');
+  el.className = 'badge b-orange';
+}
+async function submitJudge(){
+  if(!JD.verdict){ alert('请选择裁决结论'); return; }
+  const basis = document.getElementById('jdBasis').value.trim();
+  if(basis.length < 8){ alert('请写明裁决依据（不少于 8 字）'); return; }
+  const j = await api(`/api/orders/${FLOW.id}/judge`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      verdict: JD.verdict, basis,
+      note: document.getElementById('jdNote').value.trim(),
+      dispute_type: JD.dispute
+    })
+  });
+  if(j.code !== 0){ alert((j.data && j.data.msg) || j.msg); return; }
+  closeModal('jdModal');
+  closeModal('flowModal');
+  load();
+}
+
+/* ---------------- 转派 ---------------- */
+let TF = { id: null, from: '' };
+async function openTransfer(id){
+  const o = CUR.find(x => x.id === id) || {};
+  TF.from = o.assignee || '';
+  const j = await api('/api/orders/handlers');
+  if(j.code !== 0){ alert((j.data && j.data.msg) || j.msg); return; }
+  const list = (j.data && j.data.items) || [];
+  // 只剩自己一个人时，转派没有任何意义，直接说明白，别让人选完再报错
+  const others = list.filter(x => x.name !== TF.from);
+  if(!list.length){
+    alert('本单位暂无可承接的处理人账号'); return;
+  }
+  TF.id = id;
+  const sel = document.getElementById('tfTo');
+  sel.innerHTML = list.map(x =>
+    `<option value="${esc(x.name)}">${esc(x.name)}（${esc(x.username)}）</option>`).join('');
+  document.getElementById('tfNote').value = '';
+  document.getElementById('tfMeta').textContent =
+    others.length ? '转派后原处理人会留在流转记录里，不会被覆盖。'
+                  : '注意：本单位只有当前这一个处理人账号，转给自己不会改变状态。';
+  document.getElementById('tfModal').classList.add('show');
+}
+
+async function submitTransfer(){
+  const to = document.getElementById('tfTo').value;
+  const note = document.getElementById('tfNote').value.trim();
+  const j = await api(`/api/orders/${TF.id}/transfer`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({assignee: to, note: note})
+  });
+  if(j.code !== 0){ alert((j.data && j.data.msg) || j.msg); return; }
+  closeModal('tfModal');
+  load();
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.modal').forEach(m => {
+  m.addEventListener('click', e => { if(e.target === m) m.classList.remove('show'); });
+});
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape') document.querySelectorAll('.modal.show')
+    .forEach(m => m.classList.remove('show'));
+});
+
+async function accept(id){
+  const j = await api(`/api/orders/${id}/accept`, {method:'POST'});
+  if(j.code !== 0) alert((j.data && j.data.msg) || j.msg);
+  load();
+}
+
+async function finish(id){
+  const fb = prompt('请填写处理反馈（将自动归档留痕）：');
+  if(fb === null) return;
+  if(!fb.trim()){ alert('反馈不能为空'); return; }
+  const j = await api(`/api/orders/${id}/finish`, {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({feedback:fb})});
+  if(j.code !== 0) alert((j.data && j.data.msg) || j.msg);
+  load();
+}
+
+let _t = null;
+document.getElementById('q').addEventListener('input', e => {
+  clearTimeout(_t);
+  _t = setTimeout(() => {
+    S.q = e.target.value.trim(); S.page = 1; syncUrl(); load();
+  }, 260);                                  // 防抖：边输边查会打一串请求
+});
+document.getElementById('pgPrev').onclick = () => {
+  if(S.page > 1){ S.page--; syncUrl(); load(); window.scrollTo({top:0,behavior:'smooth'}); }
+};
+document.getElementById('pgNext').onclick = () => {
+  S.page++; syncUrl(); load(); window.scrollTo({top:0,behavior:'smooth'});
+};
+
+renderChips();
+load();
+</script>
+{% endblock %}

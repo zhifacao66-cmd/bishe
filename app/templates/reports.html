@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}报表中心 · 极简减负平台{% endblock %}
+{% block page_title %}报表中心{% endblock %}
+{% block page_sub %}报表Agent 一键汇总 · 脱敏后上报街道{% if not can('report.generate') %} · 当前为只读监督视角{% endif %}{% endblock %}
+
+{% block content %}
+{% if can('report.generate') %}
+<!-- 生成器 -->
+<div class="card col-12">
+  <div class="card-b" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <b>生成街道月报：</b>
+    <input type="month" id="period" class="fde-input" style="min-height:0;height:38px;width:180px;padding:6px 12px;">
+    <button class="btn btn-primary" id="btnGen" onclick="gen()">⚡ 报表Agent 生成</button>
+    <span class="hint" style="color:var(--muted);font-size:12px">报表只含汇总数据，不含居民敏感明文</span>
+  </div>
+</div>
+{% else %}
+<div class="card col-12">
+  <div class="card-b" style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:#3b4a5e;">
+    <span class="chip" style="background:#eef3fb;color:#206bc4;border-color:#d6e4f8">👁 只读视角</span>
+    街道账号仅可查看与核对报表，报表由各社区工作者按月生成后上报，以保证数据源头责任可追溯。
+  </div>
+</div>
+{% endif %}
+
+<!-- 报表详情 -->
+<div class="card col-7" id="detailCard" style="display:none">
+  <div class="card-h"><h2 id="dTitle">报表详情</h2>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="hint" id="dTime"></span>
+      <button class="btn btn-ghost" id="btnVer" onclick="toggleVersions()" style="padding:5px 12px;font-size:12.5px">🕘 版本历史</button>
+      <a class="btn btn-ghost" href="javascript:backToList()" style="padding:5px 12px;font-size:12.5px">← 返回列表</a>
+      <a class="btn btn-primary" id="dExport" href="#" style="padding:5px 14px;font-size:12.5px">📥 导出 Excel</a>
+    </div>
+  </div>
+  <div class="card-b">
+    <div style="background:#f6f9ff;border:1px solid #dbe7fb;border-radius:9px;padding:14px;font-size:13px;line-height:1.9;" id="dSummary"></div>
+    <div id="dChart" style="width:100%;height:260px;margin-top:14px;"></div>
+    <div class="hint" style="margin-top:6px;font-size:12px;color:var(--muted)">
+      导出件为报表快照的排版件：6 个工作表（概览 / 业务线 / 业务类型 / 工单 / 明细 / 填报说明），
+      数字与上方完全一致，可直接打印报送。
+    </div>
+
+    <!-- 版本历史：一期一份 + 旧版整份留存，两个诉求同时满足 -->
+    <div id="dVerBox" style="display:none;margin-top:16px;border-top:1px solid #eef1f6;padding-top:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+        <b style="font-size:13px">🕘 版本历史</b>
+        <span class="hint" style="font-size:12px;color:var(--muted)">
+          列表与导出件里一期只有一份；被覆盖的旧版整份留在这里，可回滚
+        </span>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr>
+            <th style="width:96px">版本</th><th>摘要</th>
+            <th style="width:120px">生成时间</th><th style="width:110px">操作</th>
+          </tr></thead>
+          <tbody id="dVerBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 历史报表 -->
+<div class="card col-5" id="listCard" style="display:none">
+  <div class="card-h"><h2>📚 历史报表</h2></div>
+  <div class="tw">
+    <table>
+      <thead><tr><th>周期</th><th>生成时间</th><th>操作</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 报表列表（默认） -->
+<div class="card col-12" id="listOnly">
+  <div class="card-h"><h2>📚 历史报表</h2><span class="hint">点击"查看"展开详情</span></div>
+  <div class="tw">
+    <table>
+      <thead><tr><th>周期</th><th>摘要</th><th>生成时间</th><th>操作</th></tr></thead>
+      <tbody id="tbody2"><tr><td colspan="4" style="text-align:center;color:var(--muted)">暂无报表，点上方按钮生成第一份</td></tr></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const periodEl = document.getElementById('period');
+if (periodEl) periodEl.value = new Date().toISOString().slice(0,7);
+let chart = null;
+let curId = null;
+let verOpen = false;
+// 回滚是写操作，权限与"生成"同一条；只读视角看得到历史但不能改归档件
+const CAN_GEN = {{ 'true' if can('report.generate') else 'false' }};
+
+/* echarts 只在"看某份报表"时才需要，1MB 的库不该拖累刚进页面的那一下。
+   本地静态资源 + mtime 版本号 → 第一次之后永远命中磁盘缓存。 */
+let _ec = null;
+function ensureEcharts(){
+  if (window.echarts) return Promise.resolve();
+  if (_ec) return _ec;
+  _ec = new Promise(function (res, rej) {
+    const s = document.createElement('script');
+    s.src = '{{ asset("vendor/echarts.min.js") }}';
+    s.onload = function () { res(); };
+    s.onerror = function () { rej(new Error('图表库加载失败')); };
+    document.head.appendChild(s);
+  });
+  return _ec;
+}
+
+const EXPORT = id => `/reports/${id}/export/xlsx`;
+const viewBtn = id => `<button class="btn btn-ghost" style="padding:4px 12px;font-size:12px" onclick="viewDetail(${id})">查看</button>`;
+// 导出用 <a>：浏览器自己下文件，不用 fetch + blob，断网重试也简单
+const xlsBtn = id => `<a class="btn btn-ghost" style="padding:4px 12px;font-size:12px;margin-left:6px" href="${EXPORT(id)}">📥 Excel</a>`;
+
+async function gen(){
+  const btn = document.getElementById('btnGen'); btn.disabled=true; btn.textContent='汇总中…';
+  try{
+    const j = await api('/api/reports/generate',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({period:document.getElementById('period').value})});
+    if(j.code!==0){ alert(j.msg||'生成失败'); return; }
+    if(j.data && j.data.regenerated){
+      // 一期一份：同月再点一次是覆盖升版，不新增记录。必须说清楚，
+      // 否则用户以为"又生成了一份"，实际上一期只有一份归档件。
+      alert(`本月报表已存在，已重新生成为第 ${j.data.version} 版（覆盖原快照，审计日志留有记录）`);
+    }
+    showDetail(j.data); loadList();
+  } finally { btn.disabled=false; btn.textContent='⚡ 报表Agent 生成'; }
+}
+
+async function showDetail(d){
+  curId = d.report_id || curId;
+  document.getElementById('listOnly').style.display='none';
+  document.getElementById('detailCard').style.display='';
+  document.getElementById('listCard').style.display='';
+  document.getElementById('dTitle').textContent = `${d.period} 社区治理月报（报街道）`;
+  document.getElementById('dTime').textContent = (d.generated_at||'') +
+    (d.version > 1 ? ` · 第 ${d.version} 版` : '') +
+    (d.rollback_from ? `（回滚自第 ${d.rollback_from} 版）` : '');
+  document.getElementById('dExport').href = curId ? EXPORT(curId) : '#';
+  document.getElementById('dSummary').textContent = d.summary;
+  // 换了一份报表，展开着的版本列表必须跟着换——留着上一份的历史会张冠李戴
+  if (verOpen) loadVersions();
+  const lines = Object.keys(d.line_counts);
+  try { await ensureEcharts(); } catch (e) { return; }   // 图表库没加载上，摘要照看不误
+  if(chart) chart.dispose();
+  chart = echarts.init(document.getElementById('dChart'));
+  /* 手机上转屏/拖宽窗口后容器宽度会变，ECharts 画布不会自己跟着变——
+     不加这个监听，横过来看图表就被拉变形或留出半屏空白。
+     同一份监听只挂一次，反复打开报表不会越堆越多。 */
+  if (!window.__repChartResize) {
+    window.__repChartResize = true;
+    window.addEventListener('resize', function () { if (chart) chart.resize(); });
+  }
+  chart.setOption({
+    tooltip:{}, legend:{bottom:0,textStyle:{color:'#6b7a90'}},
+    grid:{left:40,right:20,top:20,bottom:40},
+    xAxis:{type:'category',data:lines,axisLabel:{color:'#6b7a90'}},
+    yAxis:{type:'value',splitLine:{lineStyle:{color:'#eef1f6'}},axisLabel:{color:'#6b7a90'}},
+    series:[{name:'业务项数',type:'bar',barWidth:30,data:lines.map(l=>d.line_counts[l]),
+      itemStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,
+        colorStops:[{offset:0,color:'#4299e1'},{offset:1,color:'#206bc4'}]},borderRadius:[5,5,0,0]},
+      label:{show:true,position:'top',color:'#206bc4'}}]
+  });
+}
+
+async function viewDetail(id){
+  const j = await api(`/api/reports/${id}`);
+  if(j.code===0) showDetail(j.data); else alert(j.msg||'报表不存在');
+}
+
+/* ---------- 版本历史与回滚 ---------- */
+
+async function toggleVersions(){
+  const box = document.getElementById('dVerBox');
+  verOpen = box.style.display === 'none';
+  box.style.display = verOpen ? '' : 'none';
+  if (verOpen) await loadVersions();
+}
+
+async function loadVersions(){
+  if(!curId) return;
+  const j = await api(`/api/reports/${curId}/versions`);
+  const list = (j.data)||[];
+  const tb = document.getElementById('dVerBody');
+  if(!list.length){ tb.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted)">暂无版本记录</td></tr>'; return; }
+  tb.innerHTML = list.map(v=>`<tr>
+    <td><b>v${v.version}</b>
+      ${v.current?'<span class="badge b-green">当前</span>':''}
+      ${v.rollback_from?`<span class="badge b-orange" title="本版内容抄自旧版">↩ v${v.rollback_from}</span>`:''}</td>
+    <td style="font-size:12px;color:var(--muted);max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(v.summary)}">${esc(v.summary)||'-'}</td>
+    <td style="font-size:12px;color:var(--muted)">${esc(v.generated_at)||'-'}${v.reason?`<br><span style="font-size:11px">${esc(v.reason)}</span>`:''}</td>
+    <td>${v.current
+      ? '<span style="font-size:12px;color:var(--muted)">—</span>'
+      : (CAN_GEN
+          ? `<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="doRollback(${v.version})">回滚到此版</button>`
+          : '<span style="font-size:12px;color:var(--muted)">只读</span>')}</td>
+  </tr>`).join('');
+}
+
+async function doRollback(v){
+  // 说得具体些：回滚会生成一个新版本号，不是"改回旧号"。
+  // 用户以为版本号会倒退，就会在事后找不到"刚才那份"到底存不存在。
+  if(!confirm(`确认回滚到第 ${v} 版？\n\n当前版本会先整份存档（不会丢），回滚后生成的是新版本号。`)) return;
+  const j = await api(`/api/reports/${curId}/rollback`, {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({version: v})});
+  if(j.code!==0){ alert((j.data && j.data.msg) || j.msg || '回滚失败'); return; }
+  showDetail(j.data); loadList();
+  alert((j.data && j.data.msg) || '已回滚');
+}
+
+// 详情是"展开"而不是"跳走"：看完要能回列表继续挑下一份，不然就得上翻滚动条
+function backToList(){
+  curId = null;
+  document.getElementById('detailCard').style.display='none';
+  document.getElementById('listCard').style.display='none';
+  document.getElementById('listOnly').style.display='';
+  loadList();
+}
+
+async function loadList(){
+  const j = await api('/api/reports');
+  const list = j.data||[];
+  const withSummary = document.getElementById('listOnly').style.display!=='none';
+  document.getElementById('tbody2').innerHTML = list.length ? list.map(r=>`<tr>
+      <td><b>${esc(r.period)}</b>${r.version>1?` <span class="badge b-orange" title="重新生成过">第 ${r.version} 版</span>`:''}</td>
+      ${withSummary?`<td style="font-size:12px;color:var(--muted)">${esc(String(r.summary||'').slice(0,40))}…</td>`:''}
+      <td style="font-size:12px;color:var(--muted)">${esc(r.generated_at)}</td>
+      <td style="white-space:nowrap">${viewBtn(r.id)}${xlsBtn(r.id)}</td></tr>`).join('')
+    : '<tr><td colspan="4" style="text-align:center;color:var(--muted)">暂无报表，点上方按钮生成第一份</td></tr>';
+  document.getElementById('tbody').innerHTML = list.map(r=>
+    `<tr><td>${esc(r.period)}${r.version>1?` <span class="badge b-orange">v${r.version}</span>`:''}</td><td style="font-size:12px;color:var(--muted)">${esc(r.generated_at)}</td>
+     <td style="white-space:nowrap">${viewBtn(r.id)}${xlsBtn(r.id)}</td></tr>`).join('');
+}
+loadList();
+</script>
+{% endblock %}
