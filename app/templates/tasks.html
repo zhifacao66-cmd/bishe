@@ -90,9 +90,17 @@ function syncOrg(){
 }
 
 async function load(){
-  const j = await api('/api/tasks');
-  if(j.code !== 0){ document.getElementById('tbody').innerHTML =
-    `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${esc(j.msg)}</td></tr>`; return; }
+  const fail = function (msg) {
+    listFail('tbody', 5, msg);
+    ['cOpen', 'cOver', 'cDone'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '-';       // 卡片也别留着上一次的数字
+    });
+  };
+  let j;
+  try { j = await api('/api/tasks'); }
+  catch (e) { return fail(e.message); }
+  if(j.code !== 0){ return fail(j.msg); }
   const d = j.data, list = d.rows || [];
   document.getElementById('cOpen').textContent = d.summary.open;
   document.getElementById('cOver').textContent = d.summary.overdue;
@@ -160,7 +168,9 @@ async function createTask(){
 
 async function finishTask(id){
   if(!confirm(CAN_MANAGE ? '确认关闭该任务？' : '确认该任务已完成？')) return;
-  const j = await api(`/api/tasks/${id}/done`, {method:'POST'});
+  let j;
+  try { j = await api(`/api/tasks/${id}/done`, {method:'POST'}); }
+  catch (e) { alert('操作失败：' + (e.message || '网络异常，请重试')); return; }
   if(j.code !== 0) alert(j.msg);
   load();
 }

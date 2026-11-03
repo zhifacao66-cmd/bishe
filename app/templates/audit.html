@@ -58,7 +58,16 @@ async function load(reset){
   const qs = new URLSearchParams({limit: String(PAGE)});
   if(cur) qs.set('agent', cur);
   if(CURSOR) qs.set('cursor', CURSOR);
-  const j = await api('/api/audit?' + qs);
+  const fail = function (msg) {          // 失败时连"共 N 条"一起改，别让卡片和表格互相打架
+    ROWS = []; CURSOR = '';
+    listFail('tbody', 6, msg);
+    document.getElementById('truncHint').textContent = '加载失败';
+    document.getElementById('btnMore').style.display = 'none';
+  };
+  let j;
+  try { j = await api('/api/audit?' + qs); }
+  catch (e) { return fail(e.message); }
+  if (j.code !== 0) { return fail(j.msg); }
   const list = (j.data && j.data.items) || [];
   const c = (j.data && j.data.counts) || {};
 
@@ -95,7 +104,13 @@ function render(){
 }
 
 async function loadFilter(){
-  const j = await api('/api/audit/agents');
+  let j;
+  try { j = await api('/api/audit/agents'); }
+  catch (e) {
+    document.getElementById('agentFilter').innerHTML =
+      '<span style="color:var(--muted);font-size:12px">筛选项加载失败，可刷新页面重试</span>';
+    return;
+  }
   const mk=(v,t)=>`<button class="btn ${v===cur?'btn-primary':'btn-ghost'}" style="padding:4px 14px;font-size:12px" onclick="setA('${esc(v)}')">${esc(t)}</button>`;
   document.getElementById('agentFilter').innerHTML = mk('','全部') + (j.data||[]).map(a=>mk(a,AGENT_CN[a]||a)).join('');
 }

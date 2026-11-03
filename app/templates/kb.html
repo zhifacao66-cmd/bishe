@@ -139,7 +139,13 @@ let DOCS = [], CUR_CAT = '';
 let STATS = null;
 async function getStats(force){
   if (STATS && !force) return STATS;
-  const j = await api('/api/kb/stats');
+  let j;
+  try { j = await api('/api/kb/stats'); }
+  catch (e) {
+    // 统计只影响三个数字，不该因为它把整页打断；读不到就退回上次的值/空值
+    if (window.console) console.warn('[知识库] 统计加载失败：' + (e.message || ''));
+    return STATS || {};
+  }
   STATS = j.data || {};
   return STATS;
 }
@@ -152,10 +158,21 @@ async function loadStats(){
 }
 
 async function loadDocs(){
-  const j = await api('/api/kb/docs' + (CUR_CAT ? '?category=' + encodeURIComponent(CUR_CAT) : ''));
+  const box = document.getElementById('docList');
+  const fail = function (msg) {
+    DOCS = [];
+    document.getElementById('docCount').textContent = '加载失败';
+    box.innerHTML = '<div style="padding:24px;text-align:center;color:#b03131">加载失败：'
+      + esc(msg || '未知错误')
+      + '<div style="color:var(--muted);font-size:12px;margin-top:6px">'
+      + '列表已清空，避免把旧内容当成最新数据；稍后重试即可</div></div>';
+  };
+  let j;
+  try { j = await api('/api/kb/docs' + (CUR_CAT ? '?category=' + encodeURIComponent(CUR_CAT) : '')); }
+  catch (e) { return fail(e.message); }
+  if (j.code !== 0) { return fail(j.msg); }
   DOCS = j.data || [];
   document.getElementById('docCount').textContent = DOCS.length + ' 篇';
-  const box = document.getElementById('docList');
   if(!DOCS.length){ box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:12.5px">该分类暂无文档</div>'; return; }
   box.innerHTML = DOCS.map(d=>`
     <div class="doc-row">
@@ -221,7 +238,9 @@ async function ask(){
 }
 
 async function openDoc(id){
-  const j = await api('/api/kb/docs/' + id);
+  let j;
+  try { j = await api('/api/kb/docs/' + id); }
+  catch (e) { alert('原文加载失败：' + (e.message || '网络异常')); return; }
   const d = j.data; if(!d) return;
   document.getElementById('mTitle').textContent = d.title;
   document.getElementById('mMeta').textContent = `${d.category} · ${d.source || '未标注来源'}`;
@@ -239,9 +258,12 @@ async function addDoc(){
   const title = document.getElementById('nTitle').value.trim();
   const content = document.getElementById('nContent').value.trim();
   if(!title || content.length < 20){ alert('请填写标题和至少 20 字的正文'); return; }
-  const j = await api('/api/kb/docs',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({title, content, category:document.getElementById('nCat').value,
-      source:document.getElementById('nSrc').value})});
+  let j;
+  try {
+    j = await api('/api/kb/docs',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({title, content, category:document.getElementById('nCat').value,
+        source:document.getElementById('nSrc').value})});
+  } catch (e) { alert('入库失败：' + (e.message || '网络异常，请重试')); return; }
   if(j.code!==0){ alert(j.msg); return; }
   alert(`已入库，切分为 ${j.data.chunks} 个片段`);
   document.getElementById('nTitle').value=''; document.getElementById('nContent').value='';
@@ -255,7 +277,9 @@ async function delDoc(id){
   const doc = DOCS.find(x => x.id === id);
   const title = doc ? doc.title : ('#' + id);
   if(!confirm(`确认删除《${title}》？删除后会立即重建索引，该文档将不再被检索到。`)) return;
-  const j = await api('/api/kb/docs/'+id,{method:'DELETE'});
+  let j;
+  try { j = await api('/api/kb/docs/'+id,{method:'DELETE'}); }
+  catch (e) { alert('删除失败：' + (e.message || '网络异常，请重试')); return; }
   if(j.code!==0){ alert(j.msg); return; }
   loadStats(); loadCats(); loadDocs();
 }

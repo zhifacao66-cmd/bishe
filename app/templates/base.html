@@ -240,6 +240,22 @@ window.esc = function (v) {
       boom('network', '网络连接失败，请检查网络后重试');
     });
   };
+
+  /* 列表加载失败时，把失败原因写进表格本体。
+     为什么必须写进表格：只弹顶部提示条时，表格里要么还是上一次的数据
+     （用户当成最新的），要么是"暂无记录"（把故障说成没数据）。
+     两种都会让故障看起来像正常。清空旧行也在这一步——宁可空白，不可误导。 */
+  window.listFail = function (elId, cols, msg, hint) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    var safe = (window.esc ? window.esc(msg || '未知错误') : (msg || '未知错误'));
+    el.innerHTML = '<tr><td colspan="' + cols + '"'
+      + ' style="padding:24px;text-align:center;color:#b03131">'
+      + '加载失败：' + safe
+      + '<div style="color:var(--muted);font-size:12px;margin-top:6px">'
+      + (hint || '表格已清空，避免把旧内容当成最新数据；稍后重试即可')
+      + '</div></td></tr>';
+  };
 })();
 </script>
 {% if wm_css %}

@@ -169,7 +169,9 @@ async function showDetail(d){
 }
 
 async function viewDetail(id){
-  const j = await api(`/api/reports/${id}`);
+  let j;
+  try { j = await api(`/api/reports/${id}`); }
+  catch (e) { alert('报表加载失败：' + (e.message || '网络异常')); return; }
   if(j.code===0) showDetail(j.data); else alert(j.msg||'报表不存在');
 }
 
@@ -184,9 +186,16 @@ async function toggleVersions(){
 
 async function loadVersions(){
   if(!curId) return;
-  const j = await api(`/api/reports/${curId}/versions`);
-  const list = (j.data)||[];
   const tb = document.getElementById('dVerBody');
+  const failV = function (msg) {
+    tb.innerHTML = '<tr><td colspan="4" style="padding:18px;text-align:center;color:#b03131">'
+      + '加载失败：' + esc(msg || '未知错误') + '</td></tr>';
+  };
+  let j;
+  try { j = await api(`/api/reports/${curId}/versions`); }
+  catch (e) { return failV(e.message); }
+  if(j.code !== 0) { return failV(j.msg); }
+  const list = (j.data)||[];
   if(!list.length){ tb.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted)">暂无版本记录</td></tr>'; return; }
   tb.innerHTML = list.map(v=>`<tr>
     <td><b>v${v.version}</b>
@@ -206,8 +215,11 @@ async function doRollback(v){
   // 说得具体些：回滚会生成一个新版本号，不是"改回旧号"。
   // 用户以为版本号会倒退，就会在事后找不到"刚才那份"到底存不存在。
   if(!confirm(`确认回滚到第 ${v} 版？\n\n当前版本会先整份存档（不会丢），回滚后生成的是新版本号。`)) return;
-  const j = await api(`/api/reports/${curId}/rollback`, {method:'POST',
-    headers:{'Content-Type':'application/json'}, body:JSON.stringify({version: v})});
+  let j;
+  try {
+    j = await api(`/api/reports/${curId}/rollback`, {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify({version: v})});
+  } catch (e) { alert('回滚失败：' + (e.message || '网络异常，请重试')); return; }
   if(j.code!==0){ alert((j.data && j.data.msg) || j.msg || '回滚失败'); return; }
   showDetail(j.data); loadList();
   alert((j.data && j.data.msg) || '已回滚');
@@ -223,7 +235,16 @@ function backToList(){
 }
 
 async function loadList(){
-  const j = await api('/api/reports');
+  const failL = function (msg) {
+    const row = '<tr><td colspan="4" style="padding:24px;text-align:center;color:#b03131">'
+      + '加载失败：' + esc(msg || '未知错误') + '</td></tr>';
+    document.getElementById('tbody2').innerHTML = row;
+    document.getElementById('tbody').innerHTML = row;
+  };
+  let j;
+  try { j = await api('/api/reports'); }
+  catch (e) { return failL(e.message); }
+  if(j.code !== 0) { return failL(j.msg); }
   const list = j.data||[];
   const withSummary = document.getElementById('listOnly').style.display!=='none';
   document.getElementById('tbody2').innerHTML = list.length ? list.map(r=>`<tr>

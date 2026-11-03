@@ -70,7 +70,19 @@ async function load(){
   const qs = new URLSearchParams({ limit: '50', page: String(S.page) });
   if(S.line) qs.set('line', S.line);
   if(S.q) qs.set('q', S.q);
-  const j = await api('/api/ledgers?' + qs);
+  const fail = function (msg) {
+    listFail('tbody', 7, msg);
+    ['hint', 'matchHint', 'pgInfo'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '';
+    });
+    document.getElementById('pgPrev').disabled = true;
+    document.getElementById('pgNext').disabled = true;
+  };
+  let j;
+  try { j = await api('/api/ledgers?' + qs); }
+  catch (e) { return fail(e.message); }
+  if (j.code !== 0) { return fail(j.msg); }
   const list = (j.data && j.data.items) || [];
   const c = (j.data && j.data.counts) || {};
   // 三张卡说的是"整本台账的家底"，服务端 count，不随筛选变
@@ -103,7 +115,13 @@ async function load(){
 }
 
 async function loadFilter(){
-  const j = await api('/api/ledgers/lines');
+  let j;
+  try { j = await api('/api/ledgers/lines'); }
+  catch (e) {
+    document.getElementById('lineFilter').innerHTML =
+      '<span style="color:var(--muted);font-size:12px">筛选项加载失败，可刷新页面重试</span>';
+    return;
+  }
   const box = document.getElementById('lineFilter');
   const mk = (val,txt)=>`<button class="btn ${val===S.line?'btn-primary':'btn-ghost'}"
     style="padding:4px 14px;font-size:12px" onclick="setLine('${esc(val)}')">${esc(txt)}</button>`;

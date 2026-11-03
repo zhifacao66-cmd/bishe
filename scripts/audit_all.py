@@ -478,6 +478,31 @@ def group_d():
         "全部能找到对应元素" if not miss_id else f"{len(miss_id)} 处找不到：" + "、".join(miss_id[:6]),
         "元素改名后残留旧 id 会空指针，页面表现为点了没反应")
 
+    # 拉列表失败时必须把失败写进表格本体。只弹顶部提示条不够：
+    # 表格里要么还是上一次的数据（用户当成最新的），要么是"暂无记录"
+    # （把故障说成"没有数据"）——两种都让故障看起来像正常。
+    #
+    # 判据按行取窗口：文件级"有一个 try 就算过"太宽——页面上别的按钮有 try，
+    # 加载函数照样裸着（system.html 就是这样，153/179 行的 try 与 load() 无关）。
+    no_guard = []
+    for p in sorted(tpl.rglob("*.html")):
+        lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+        for i, ln in enumerate(lines):
+            if "await api(" not in ln:
+                continue
+            near = "\n".join(lines[max(0, i - 12):i + 13])
+            if not re.search(r"\btry\s*\{|\.catch\s*\(|\bcatch\s*\(", near):
+                no_guard.append(f"{p.name}:{i + 1}")
+    no_guard = list(dict.fromkeys(no_guard))
+    if no_guard:
+        add("D", "D6 请求失败有兜底", FAIL,
+            f"{len(no_guard)} 处 await api 没有 try/catch："
+            + "、".join(no_guard[:6]),
+            "没有兜底时：通道失败会停在「加载中」或继续显示旧数据，"
+            "业务失败会伪装成「暂无记录」")
+    else:
+        add("D", "D6 请求失败有兜底", PASS, "每处 await api 都有 try/catch")
+
 
 # ---------------------------------------------------------------- E 数据与流程
 

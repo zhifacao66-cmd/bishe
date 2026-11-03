@@ -225,7 +225,23 @@ async function load(){
   const qs = new URLSearchParams({ limit: '50', page: String(S.page) });
   if(S.status) qs.set('status', S.status);
   if(S.q) qs.set('q', S.q);
-  const j = await api('/api/orders?' + qs);
+  const orderFail = function (msg) {     // 卡片一起改，别让"待办 0"看起来像真的
+    ['cOpen', 'cDoing', 'cDone', 'cDispute'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '-';
+    });
+    ['truncHint', 'matchHint', 'pgInfo'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '';
+    });
+    document.getElementById('pgPrev').disabled = true;
+    document.getElementById('pgNext').disabled = true;
+    listFail('tbody', 8, msg);
+  };
+  let j;
+  try { j = await api('/api/orders?' + qs); }
+  catch (e) { return orderFail(e.message); }
+  if (j.code !== 0) { return orderFail(j.msg); }
   const list = (j.data && j.data.items) || [];
   CUR = list;
   const c = (j.data && j.data.counts) || {};
@@ -408,7 +424,9 @@ let JD = { verdict: '', dispute: '' };
 async function openJudge(){
   const d = FLOW.data;
   if(!d) return;
-  const j = await api('/api/orders/arbitration');
+  let j;
+  try { j = await api('/api/orders/arbitration'); }
+  catch (e) { alert('裁决选项加载失败：' + (e.message || '网络异常')); return; }
   if(j.code !== 0){ alert((j.data && j.data.msg) || j.msg); return; }
   JD = { verdict: '', dispute: d.dispute_type || '' };
   document.getElementById('jdMeta').innerHTML =
@@ -441,15 +459,18 @@ async function submitJudge(){
   if(!JD.verdict){ alert('请选择裁决结论'); return; }
   const basis = document.getElementById('jdBasis').value.trim();
   if(basis.length < 8){ alert('请写明裁决依据（不少于 8 字）'); return; }
-  const j = await api(`/api/orders/${FLOW.id}/judge`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      verdict: JD.verdict, basis,
-      note: document.getElementById('jdNote').value.trim(),
-      dispute_type: JD.dispute
-    })
-  });
+  let j;
+  try {
+    j = await api(`/api/orders/${FLOW.id}/judge`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        verdict: JD.verdict, basis,
+        note: document.getElementById('jdNote').value.trim(),
+        dispute_type: JD.dispute
+      })
+    });
+  } catch (e) { alert('裁决提交失败：' + (e.message || '网络异常，请重试')); return; }
   if(j.code !== 0){ alert((j.data && j.data.msg) || j.msg); return; }
   closeModal('jdModal');
   closeModal('flowModal');
@@ -461,7 +482,9 @@ let TF = { id: null, from: '' };
 async function openTransfer(id){
   const o = CUR.find(x => x.id === id) || {};
   TF.from = o.assignee || '';
-  const j = await api('/api/orders/handlers');
+  let j;
+  try { j = await api('/api/orders/handlers'); }
+  catch (e) { alert('处理人列表加载失败：' + (e.message || '网络异常')); return; }
   if(j.code !== 0){ alert((j.data && j.data.msg) || j.msg); return; }
   const list = (j.data && j.data.items) || [];
   // 只剩自己一个人时，转派没有任何意义，直接说明白，别让人选完再报错
@@ -483,10 +506,13 @@ async function openTransfer(id){
 async function submitTransfer(){
   const to = document.getElementById('tfTo').value;
   const note = document.getElementById('tfNote').value.trim();
-  const j = await api(`/api/orders/${TF.id}/transfer`, {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({assignee: to, note: note})
-  });
+  let j;
+  try {
+    j = await api(`/api/orders/${TF.id}/transfer`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({assignee: to, note: note})
+    });
+  } catch (e) { alert('转派失败：' + (e.message || '网络异常，请重试')); return; }
   if(j.code !== 0){ alert((j.data && j.data.msg) || j.msg); return; }
   closeModal('tfModal');
   load();
@@ -502,7 +528,9 @@ document.addEventListener('keydown', e => {
 });
 
 async function accept(id){
-  const j = await api(`/api/orders/${id}/accept`, {method:'POST'});
+  let j;
+  try { j = await api(`/api/orders/${id}/accept`, {method:'POST'}); }
+  catch (e) { alert('接单失败：' + (e.message || '网络异常，请重试')); return; }
   if(j.code !== 0) alert((j.data && j.data.msg) || j.msg);
   load();
 }
@@ -511,8 +539,11 @@ async function finish(id){
   const fb = prompt('请填写处理反馈（将自动归档留痕）：');
   if(fb === null) return;
   if(!fb.trim()){ alert('反馈不能为空'); return; }
-  const j = await api(`/api/orders/${id}/finish`, {method:'POST',
-    headers:{'Content-Type':'application/json'}, body:JSON.stringify({feedback:fb})});
+  let j;
+  try {
+    j = await api(`/api/orders/${id}/finish`, {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify({feedback:fb})});
+  } catch (e) { alert('提交反馈失败：' + (e.message || '网络异常，请重试')); return; }
   if(j.code !== 0) alert((j.data && j.data.msg) || j.msg);
   load();
 }
