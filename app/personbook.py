@@ -245,16 +245,48 @@ LIFT_MIN_WEIGHT = 2
 URGENT_WEIGHT = 3
 
 
-def lift_note(persons):
+def addr_exists_anywhere(text):
+    """这段地址在底册里是否存在——**不限可见范围**。
+
+    只用来区分「真的没有这户」和「有，但不在你的可查范围」。返回布尔，
+    不带任何记录内容：社区拿到一条报修来反查，知道"册里有这户、但信息
+    不归我看"就够了，具体是谁、什么标签仍然查不到。
+
+    为什么需要它：台账里有一半记录没写清社区（`community` 为空），按
+    收窄规则只有街道可见。社区反查这种地址时原来一律回「这户不在底册上」
+    ——**那是错误陈述**，社工据此认为"没有重点人员"，实际上可能是个
+    没写清社区的防溺水对象。
+    """
+    from app.agents.riskreview import addr_parts
+
+    parts = addr_parts(text or "")
+    if parts.get("level") != 3:
+        return False
+    mid = (parts.get("mid") or "").strip()
+    room = (parts.get("keys") or [""])[0]
+    if not mid or not room:
+        return False
+    return Person.query.filter(Person.addr_mid == mid,
+                               Person.addr_room == room).count() > 0
+
+
+def lift_note(persons, hidden_elsewhere=False):
     """把"这户命中之后会怎样"算成一句可直接显示的话。
 
     页面曾经自己写死"→ 该户报修应提级处理"，而命中 2 人全是三级/四级残疾
     （权重 1）时系统根本不会提级——**页面说的和系统做的相反**。
     判据只留这一处，页面与接口都只显示、不判断。
+
+    `hidden_elsewhere`：这户在册但被收窄挡住了（见 `addr_exists_anywhere`）。
+    此时不能沿用"不在底册上"那句——那是把"我没权限"说成"库里没有"。
     """
     weight = top_weight(persons)
     n = len(persons or [])
     if n == 0:
+        if hidden_elsewhere:
+            return {"weight": 0, "level": "hidden",
+                    "text": "该地址在底册中有记录，但台账没写清社区、"
+                            "不在你的可查范围——请向街道核实这户是否需要重点看护"}
         return {"weight": 0, "level": "miss",
                 "text": "这户不在底册上（或地址只到楼栋/组，认不到门号）——按常规时限处理"}
     if weight >= URGENT_WEIGHT:

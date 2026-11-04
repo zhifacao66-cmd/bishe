@@ -23,8 +23,9 @@ from flask import Blueprint, request, send_file
 
 from app.api import fail, ok
 from app.auth import current_user, perm_required
-from app.personbook import (EXPORT_SPECS, export_rows, lift_note,
-                            match_by_addr, search, stats, visible_communities)
+from app.personbook import (EXPORT_SPECS, addr_exists_anywhere, export_rows,
+                            lift_note, match_by_addr, search, stats,
+                            visible_communities)
 
 bp = Blueprint("persons", __name__)
 
@@ -78,7 +79,11 @@ def match():
         # 只写 fail(...) 会被 Flask 用 200 发出去——监控里就成了"放行"。
         return fail("缺少地址 text"), 400
     persons = match_by_addr(current_user(), text)
-    note = lift_note([p for p, _ in persons])
+    # 命中为空有两种情况，必须分开说：真的没这户，还是有这户但不在你的
+    # 可查范围（台账没写清社区的记录只有街道可见）。原来一律回"不在底册上"，
+    # 社工据此判定"没有重点人员"——实际上可能是个没写清社区的防溺水对象。
+    hidden = (not persons) and addr_exists_anywhere(text)
+    note = lift_note([p for p, _ in persons], hidden_elsewhere=hidden)
     return ok({
         "hits": [{"name": p.name_masked,
                   "tags": [t.to_dict() for t in p.tags],

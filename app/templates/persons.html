@@ -51,16 +51,21 @@
   .mres.lift{background:#fdf8f0;border-left:3px solid #d9a340;
     padding:9px 12px;border-radius:0 7px 7px 0;}
   .mres.flat{border-left:3px solid #c9d3e0;padding:9px 12px;border-radius:0 7px 7px 0;}
+  /* 在册但被收窄挡住：不是"没有"，是"你看不到"，需要人去核实 */
+  .mres.hidden{background:#fdf8f0;border-left:3px solid #d9a340;
+    padding:9px 12px;border-radius:0 7px 7px 0;color:#a8650f;}
 </style>
 
 <div class="col-12">
   <div class="pnote">
-    底册来自<b>以朵街道下发的三张台账</b>（残疾人 559 条、防溺水 2466 条——后者内部有 164 个身份证
-    重复登记、与残疾表还重叠 15 人；留守是空白模板），按身份证哈希去重后共 <b id="nTotal">—</b> 人。
+    底册来自<b>街道下发的重点人员台账</b>，去重后共 <b id="nTotal">—</b> 人。
     姓名、身份证、电话<b>全部脱敏入库</b>，原始证件号不落库。
     <span class="warn">地址精度如实标注：只有约 41% 能到门号，其余只到楼栋或社区 ——
     这决定了底册能不能直接用来上门和匹配工单。</span>
     带 <b>↗</b> 的指标可以点，点完筛选条件会落到下面的下拉里。
+    <br><span style="color:#8a97a8;font-size:11.5px">台账原件的清洗口径见 <code>docs/35</code>：
+    残疾人表与防溺水表内部有重复身份证、两表之间也有交叉，按身份证哈希去重后才得到上面这个人数。
+    当前库为<b>按同样结构生成的合成数据</b>，不是原件。</span>
   </div>
 </div>
 
@@ -350,9 +355,11 @@
       return o.value === NO_COMM;
     });
     if (!has) {                          // 社区角色的下拉里根本没有这一项
-      $('mRes').className = 'mres miss';
+      $('mRes').className = 'mres hidden';
       $('mRes').textContent = '「未明确社区」的人只有街道能看到 —— ' +
-        '社区账号的底册里本来就没有他们（让社工拿一份不知道是不是自己辖区的名单去上门是错的）。';
+        '社区账号的底册里本来就没有他们（让社工拿一份不知道是不是自己辖区的名单去上门是错的）。' +
+        '如果是具体某户要核实，用上面的「地址反查」：在册但不在你范围的地址会明确告诉你' +
+        '「需向街道核实」，不会误报成"不在底册上"。';
       return;
     }
     state.weight = '';

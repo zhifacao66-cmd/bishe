@@ -2,9 +2,10 @@
 from flask import Blueprint, redirect, render_template, request, url_for
 
 from app.params import safe_back
-from app.auth import (DEMO_USERS, ROLE_HOME, AccountDisabled, LoginThrottled,
-                      current_user, has_perm, login as do_login,
-                      logout as do_logout, login_required, perm_required)
+from app.auth import (DEMO_USERS, PERMS, ROLE_HOME, AccountDisabled,
+                      LoginThrottled, current_user, has_perm,
+                      login as do_login, logout as do_logout, login_required,
+                      perm_required)
 # 导出留痕的唯一实现在 app/exportlog.py（底册导出也要用同一份）。
 from app.exportlog import log_export as _log_export
 
@@ -191,7 +192,8 @@ def policy():
     "什么被谁看走了"。反过来，业务账号看这个页面没有意义——
     他们改不了规则，看了只会问"为什么我不能看"。
     """
-    return render_template("policy.html")
+    return render_template("policy.html",
+                           perm_count=len(PERMS))
 
 
 @bp.get("/kb")
