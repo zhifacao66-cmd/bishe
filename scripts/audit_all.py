@@ -308,6 +308,53 @@ def group_c():
         f"停用自己不拦={'是' if self_guard else '否'}",
         "三条约束：不停用自己 / 不取消自己 admin / 不失去最后一个管理员")
 
+    # -------------------------------------------------- 导出三件套
+    # 能不能导（ABAC decide）/ 水印 / 留痕，缺一不可。
+    #
+    # 这不是锦上添花：文件一旦下载就脱离了页面，之后没有任何访问日志能追。
+    # 水印让"截图外传"能追到人（文案含姓名·单位·时间·动作），
+    # 审计让"谁在什么时候导了哪张表"能查回来。
+    #
+    # 底册导出曾经只挂了 `@perm_required("person.view")`，三样全缺——
+    # 那意味着 300 个居民的姓名 / 证件掩码 / 门牌 / 残疾等级被谁导走，
+    # 事后查不到。最敏感的「人」反而比「报表」留痕更少。
+    exports, lack = 0, []
+    for p in sorted((ROOT / "app").rglob("*.py")):
+        src = p.read_text(encoding="utf-8", errors="replace")
+        try:
+            tree = ast.parse(src)
+        except SyntaxError:
+            continue
+        lines = src.splitlines()
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            rule = None
+            for d in node.decorator_list:
+                if isinstance(d, ast.Call) and d.args:
+                    a = d.args[0]
+                    if (isinstance(a, ast.Constant) and isinstance(a.value, str)
+                            and "export" in a.value):
+                        rule = a.value
+            if rule is None:
+                continue
+            exports += 1
+            seg = "\n".join(lines[node.lineno - 1:
+                                  getattr(node, "end_lineno", node.lineno)])
+            miss = []
+            if "decide(" not in seg:
+                miss.append("ABAC判定")
+            if "wm_text(" not in seg:
+                miss.append("水印")
+            if "log_export(" not in seg:
+                miss.append("审计")
+            if miss:
+                lack.append(f"{p.relative_to(ROOT)}:{node.name} 缺 " + "/".join(miss))
+    add("C", "C4 导出三件套", PASS if not lack else FAIL,
+        (f"{exports} 个导出端点均具备 ABAC + 水印 + 审计" if not lack
+         else f"{len(lack)}/{exports} 个端点缺件：" + "；".join(lack[:4])),
+        "按 URL 含 export 定位端点，函数体内须同时出现 decide( / wm_text( / log_export(")
+
 
 # ---------------------------------------------------------------- D 前端
 
