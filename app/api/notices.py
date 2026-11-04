@@ -48,6 +48,28 @@ def _int_arg(name: str, default: int, cap: int) -> int:
     return min(v, cap)
 
 
+def _load_visible(nid: int):
+    """按 id 取公告，并做 `can_view` 校验。返回 (notice, error_response)。
+
+    为什么要有这个函数：`can_view` 只写在详情里，别的按 id 取公告的端点
+    （签收 / 取落地件草稿 / 生成落地件 / 补全字段 / 置顶）各自只判了
+    `if not n`。结果 `direction=out` 的本级发文——详情页明确回"公告不存在"
+    ——却能通过 `GET /api/notices/<id>/draft` 拿到完整正文，
+    还能被 `localize` 生成落地件。**同一个"能不能看"的规则散在多处，
+    每新增一个端点就漏一次。**
+
+    对外统一说"不存在"，不透露"有这条但你没权限"：后者等于确认了
+    这条公告存在，公文场景下这个信息本身就有价值。
+    """
+    n = db.session.get(Notice, nid)
+    if not n:
+        return None, (fail("公告不存在"), 404)
+    u = current_user()
+    if not can_view(n, u.role if u else ""):
+        return None, (fail("公告不存在"), 404)
+    return n, None
+
+
 def todo_filter(base=None):
     """把「待签收 + 本单位可签」这两个条件**叠加**到已有查询上
 
@@ -291,9 +313,9 @@ def receive(nid: int):
     签收只留痕，不改发布状态——上级原文该不该让居民看到是另一件事，
     由社区在发布环节决定，两件事绑在一起会让"收到就得马上公开"变成硬约束。
     """
-    n = db.session.get(Notice, nid)
-    if not n:
-        return fail("公告不存在")
+    n, err = _load_visible(nid)
+    if err:
+        return err
     u = current_user()
     if n.receiver_org and u and u.org and u.org != n.receiver_org \
             and n.recv_status == "dispatched":
@@ -359,9 +381,9 @@ def handle(nid: int):
 @perm_required("notice.localize")
 def draft(nid: int):
     """取落地件草稿：优先模型，模型不可用降级规则模板"""
-    n = db.session.get(Notice, nid)
-    if not n:
-        return fail("公告不存在")
+    n, err = _load_visible(nid)
+    if err:
+        return err
     u = current_user()
     org = (u.org if u and u.org else "") or "本社区"
     # 咨询电话取本单位对外公开的那个号，不用个人手机——
@@ -379,9 +401,9 @@ def draft(nid: int):
 @perm_required("notice.localize")
 def localize(nid: int):
     """创建社区落地件：一条新记录，parent_id 指回上级原文"""
-    p = db.session.get(Notice, nid)
-    if not p:
-        return fail("上级文件不存在")
+    p, err = _load_visible(nid)
+    if err:
+        return err
     d = request.get_json(silent=True) or {}
     title = (d.get("title") or "").strip()
     body = (d.get("body_md") or "").strip()
@@ -417,12 +439,9 @@ def localize(nid: int):
 @bp.get("/<int:nid>")
 @perm_required("notice.view")
 def detail(nid: int):
-    n = db.session.get(Notice, nid)
-    if not n:
-        return fail("公告不存在")
-    u = current_user()
-    if not can_view(n, u.role if u else ""):
-        return fail("公告不存在")
+    n, err = _load_visible(nid)
+    if err:
+        return err
     return ok(_row(n, detail=True))
 
 
@@ -463,9 +482,9 @@ def do_pin(nid: int):
     和发布/下架一样是属地发布口径的一部分——排在前面的文件居民最先读到，
     这跟"发不发"是同一类责任，不该拆给两个人。
     """
-    n = db.session.get(Notice, nid)
-    if not n:
-        return fail("公告不存在")
+    n, err = _load_visible(nid)
+    if err:
+        return err
     d = request.get_json(silent=True) or {}
     was = bool(n.pinned)
     target = (not was) if d.get("pinned") is None else bool(d.get("pinned"))
@@ -492,9 +511,9 @@ def do_pin(nid: int):
 @perm_required("notice.manage")
 def patch(nid: int):
     """补全字段：解析不出来的部分由人补，补完即可发布"""
-    n = db.session.get(Notice, nid)
-    if not n:
-        return fail("公告不存在")
+    n, err = _load_visible(nid)
+    if err:
+        return err
     d = request.get_json(silent=True) or {}
     from app.notice.parse import _parse_date
 

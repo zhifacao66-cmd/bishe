@@ -371,7 +371,12 @@ def notice_localize(nid: int):
     from app.models import Notice
 
     n = db.session.get(Notice, nid)
-    if not n:
+    # 与 `/api/notices/<id>/localize` 同源：看不了正文的人不能打开办文页
+    # （页面会把原文渲染进编辑器）。少了这一句，out 公文虽然在 API 被拒，
+    # 从页面仍能拿到完整正文。
+    from app.notice.ingest import can_view
+    _u = current_user()
+    if not n or not can_view(n, _u.role if _u else ""):
         abort(404)
     from datetime import date as _date
     from app.notice.render import render as render_md

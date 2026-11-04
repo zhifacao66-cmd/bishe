@@ -82,9 +82,13 @@ def notices():
 def notice(nid: int):
     """公告详情。mode=view 网页阅读 / print 打印版 / official 发布版"""
     n = db.session.get(Notice, nid)
-    # 详情页按 id 直取，必须自己再判一次状态与范围：
+    # 详情页按 id 直取，必须自己再判一次范围：
     # 光有列表过滤挡不住手工拼 URL 枚举 id（居民端没有登录态，更不能依赖前端）。
-    if not n or n.status != "published" or (n.scope or "all") != "all":
+    # 用 `can_view` 而不是手写 status/scope 两个条件——列表侧 `visible_query`
+    # 还额外排除了发文（`_exclude_docs`），手写版漏了那一条，
+    # 会出现"列表里没有、拼 id 能打开"的不同源问题。
+    from app.notice.ingest import can_view
+    if not n or not can_view(n, "resident"):
         abort(404)
     mode = request.args.get("mode", "view")
     if mode not in ("view", "print", "official"):

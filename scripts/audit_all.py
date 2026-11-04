@@ -355,6 +355,37 @@ def group_c():
          else f"{len(lack)}/{exports} 个端点缺件：" + "；".join(lack[:4])),
         "按 URL 含 export 定位端点，函数体内须同时出现 decide( / wm_text( / log_export(")
 
+    # -------------------------------------------------- 按 id 取公告必判范围
+    # `can_view` 只写在详情里时，别的按 id 取公告的路径（取草稿 / 生成落地件 /
+    # 签收 / 补全 / 置顶 / 办文页 / 居民端详情）各自只判 `if not n`。
+    # 结果 `direction=out` 的本级发文虽然在详情页被拒，却能从
+    # `GET /api/notices/<id>/draft` 拿到完整正文、还能被 localize 成落地件，
+    # 办文页与居民端同样能打开。**同一个"能不能看"的规则散在多处，
+    # 每新增一个端点就漏一次**，所以固化成规则。
+    miss_guard = []
+    for p in sorted((ROOT / "app").rglob("*.py")):
+        src = p.read_text(encoding="utf-8", errors="replace")
+        try:
+            tree = ast.parse(src)
+        except SyntaxError:
+            continue
+        lines = src.splitlines()
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            seg = "\n".join(lines[node.lineno - 1:
+                                  getattr(node, "end_lineno", node.lineno)])
+            if "db.session.get(Notice" not in seg:
+                continue
+            if any(k in seg for k in ("_load_visible(", "can_view(", "direction")):
+                continue
+            miss_guard.append(f"{p.relative_to(ROOT)}:{node.name}")
+    add("C", "C5 取公告必判范围", PASS if not miss_guard else FAIL,
+        ("所有按 id 取公告的函数都有范围判断" if not miss_guard
+         else f"{len(miss_guard)} 处只判了「存不存在」：" + "、".join(miss_guard[:5])),
+        "函数体内出现 _load_visible( / can_view( / direction 任一即算判过；"
+        "漏了会让 direction=out 的公文从侧路读到正文")
+
 
 # ---------------------------------------------------------------- D 前端
 
@@ -660,6 +691,11 @@ def group_f(target: str):
             "降级（模型不可用）业务仍可跑，但拆解退规则桩")
     except Exception as e:                                        # noqa: BLE001
         add("F", "F1 服务健康", FAIL, f"{type(e).__name__}: {str(e)[:60]}", "目标不可达")
+        # 服务不可达时 F2-F4 也做不了，但必须**显式报 SKIP**而不是静默跳过：
+        # 少三项不吭声，总数会从 29 掉到 26，看报告的人不知道是"没查"还是
+        # "查了没过"。SKIP 在口径里本来就不算通过，不存在报喜的问题。
+        for _name in ("F2 默认密码未生效", "F3 传输加密", "F4 CSP 头"):
+            add("F", _name, SKIP, "服务不可达，本项未检查", "先让目标跑起来再验")
         return
 
     # 默认密码：只读验证能否登录，不做任何写操作

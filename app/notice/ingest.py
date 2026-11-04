@@ -126,6 +126,11 @@ def publish(notice_id: int, actor: str) -> tuple[bool, str]:
     n = db.session.get(Notice, notice_id)
     if not n:
         return False, "公告不存在"
+    # 本级发文（out）不进公告体系（见 `_exclude_docs`）：它能被 publish，
+    # 就会出现"发布成功但列表里找不到"，而 published_at 又被写上，
+    # 后续按发布时间排序/统计的地方会拿到一条永远不会显示的记录。
+    if (n.direction or "in") == "out":
+        return False, "本级发文不进公告体系，请走发文流程"
     missing = [k for k, v in (("标题", n.title), ("发文单位", n.issuer)) if not v]
     if missing:
         return False, f"缺少{'、'.join(missing)}，不能发布"
@@ -145,6 +150,8 @@ def take_offline(notice_id: int, actor: str) -> tuple[bool, str]:
     n = db.session.get(Notice, notice_id)
     if not n:
         return False, "公告不存在"
+    if (n.direction or "in") == "out":
+        return False, "本级发文不进公告体系，请走发文流程"
     if n.status == "offline":
         return True, f"《{n.title}》已处于下架状态"
     n.status = "offline"
