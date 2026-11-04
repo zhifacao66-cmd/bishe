@@ -127,7 +127,12 @@ def search(user, keyword="", community="", tag="", risk="", precision="",
     total = base.count()
     size = max(1, min(int(size or 20), 100))
     page = max(1, int(page or 1))
-    rows = (base.order_by(Person.addr_level.desc(), Person.id.asc())
+    # `selectinload` 预加载标签：否则序列化时每条记录都会单独查一次
+    # person_tag（50 条 = 53 次 SQL，100 条 = 103 次），是典型的 N+1。
+    # 改成批量预取后固定为 2 次：1 次取人、1 次取这一页所有人的标签。
+    from sqlalchemy.orm import selectinload
+    rows = (base.options(selectinload(Person.tags))
+                .order_by(Person.addr_level.desc(), Person.id.asc())
                 .offset((page - 1) * size).limit(size).all())
     return rows, total, note
 
@@ -376,7 +381,11 @@ def export_rows(user, kind):
     elif kind == "leftbehind":
         base = base.filter(Person.tags.any(PersonTag.kind == "留守"))
 
-    persons = base.order_by(Person.id.asc()).all()
+    # 导出是全量取数（不分页），N+1 在这条路径上更贵：300 人就是 300 次
+    # person_tag 查询。同样用 selectinload 预取。
+    from sqlalchemy.orm import selectinload
+    persons = (base.options(selectinload(Person.tags))
+                   .order_by(Person.id.asc()).all())
     header = [c[0] for c in spec["columns"]]
     rows = [[fn(i + 1, p) for _, fn in spec["columns"]]
             for i, p in enumerate(persons)]

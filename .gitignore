@@ -69,3 +69,7 @@ NUL
 # 数据库备份与恢复演练产物（含业务数据，不进仓库）
 data/backups/
 data/restored-*.db
+
+# 运行日志：会持续增长，且可能带出请求参数里的原文（含个人信息形态）。
+# 一律不进仓库；消融实验的结果另存 data/ablation_report.json 与 docs/03。
+logs/
