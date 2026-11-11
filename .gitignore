@@ -16,8 +16,10 @@ __pycache__/
 venv/
 env/
 
-# ---- 数据库：演示数据由 scripts/seed_demo.py 重建，不入库 ----
+# ---- 数据库：只入库演示库快照；测试库/真实台账/照片仍忽略 ----
 data/*.db
+# 演示库快照：换机后可直接启动；不含真实台账/照片（下面两个目录仍忽略）
+!data/community.db
 data/*.db-wal
 data/*.db-shm
 data/*.bak*

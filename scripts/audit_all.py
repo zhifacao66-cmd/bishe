@@ -59,8 +59,9 @@ def add(group: str, name: str, status: str, detail: str = "", basis: str = ""):
 # ---------------------------------------------------------------- A 凭据与密钥
 
 # 必须被 .gitignore 挡住的东西。少一条就等于把钥匙跟代码一起发出去。
-CRED_FILES = [".secret_key", ".llm_gateway_token", "llm.publish.json",
-              "llm.json", "data/community.db"]
+# data/community.db 是唯一例外：它是脱敏后的演示库，按 README 作为换机快照入库；
+# 其中居民单手机号/姓名/地址已替换为合成值，真实台账与证据照片仍由 .gitignore 排除。
+CRED_FILES = [".secret_key", ".llm_gateway_token", "llm.publish.json", "llm.json"]
 # 源码里出现即视为硬编码（赋值右侧是字符串字面量）
 CRED_RE = re.compile(
     r"""(?ix)
@@ -114,8 +115,10 @@ def group_a():
         tracked = out.stdout.splitlines()
         for f in tracked:
             base = f.rsplit("/", 1)[-1]
+            # data/community.db 是唯一允许入库的库：脱敏后的演示快照；
+            # 其他 community.db / 备份库仍按凭据文件拦截。
             if base in (".secret_key", ".llm_gateway_token", "llm.publish.json", "llm.json") \
-                    or base.startswith("community.db"):
+                    or (base.startswith("community.db") and f != "data/community.db"):
                 tracked_bad.append(f)
         add("A", "A2 已提交文件里没有凭据", PASS if not tracked_bad else FAIL,
             f"{len(tracked)} 个已跟踪文件，凭据 0 个" if not tracked_bad

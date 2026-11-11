@@ -154,6 +154,9 @@ python scripts/seed_demo.py --reset
 python run.py                           # http://127.0.0.1:5000
 ```
 
+> 仓库自带一份 `data/community.db` 演示库快照（3 个演示账号、65 条首录、300 条合成人员等），
+> 只想先跑起来可以跳过第 3 步直接启动。`seed_demo.py --reset` 会清库重建，两者不冲突。
+
 ### 4.3 Windows 一键启动
 
 双击项目根目录的 **`启动系统.bat`**，菜单里选 `[1]` 即可：脚本会依次检查 Python、
