@@ -249,6 +249,9 @@ with app.app_context():
                        raw_text="居民申请低保复核", fde_id=rec.id,
                        item_count=1, line_summary="民政", status="open")
     db.session.add(t)
+    # 模拟建单写路径：状态由写接口同步一次，渲染函数不再 commit
+    from app.itemstate import sync_ticket_status
+    sync_ticket_status(rec.id)
     db.session.commit()
     tid = t.id
     wid = wi.id
@@ -259,7 +262,19 @@ with app.test_client() as c:
           d["items"][0]["state"])
     check("整单状态同步为已办结", d["status"] == "done", d["status"])
     with app.app_context():
-        check("单据状态落库", db.session.get(ResidentTicket, tid).status == "done")
+        check("写路径把状态落库", db.session.get(ResidentTicket, tid).status == "done")
+
+# P0：GET 只读，不许再回写状态（预取/重试/爬虫不该产生写）
+with app.app_context():
+    t2 = db.session.get(ResidentTicket, tid)
+    t2.status = "open"
+    db.session.commit()
+with app.test_client() as c:
+    d = c.get("/api/portal/ticket?phone=13800138000&code=654321").get_json()["data"]
+    check("GET 仍按事项实时计算", d["status"] == "done", d["status"])
+    with app.app_context():
+        check("GET 后库状态未被改写",
+              db.session.get(ResidentTicket, tid).status == "open")
 
 # 工单在处理中 → 处理中
 with app.app_context():

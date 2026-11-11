@@ -59,6 +59,12 @@ class Config:
     # 反代后浏览器侧是 https 才能开；沙箱内是 http 回源，默认关，由环境变量控制
     SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "0") == "1"
 
+    # 是否信任最近一层反向代理写入的 X-Forwarded-*。
+    # 本机直连=0；ECS/沙箱在 nginx/网关后面时设 1，由 ProxyFix 只取最近一段，
+    # 客户端自己塞的左侧段会被丢弃。**不要**在代码里直接读 XFF 第一段当 IP：
+    # 那是客户端可伪造的，限流与取证都会失真。
+    TRUST_PROXY = os.environ.get("TRUST_PROXY", "0") == "1"
+
     # 登录失败限流：**账号维度**是主维度（IP 在代理后面不可靠，见 auth.py 注释）
     LOGIN_MAX_FAIL = int(os.environ.get("LOGIN_MAX_FAIL", "5"))
     LOGIN_IP_MAX_FAIL = int(os.environ.get("LOGIN_IP_MAX_FAIL", "30"))

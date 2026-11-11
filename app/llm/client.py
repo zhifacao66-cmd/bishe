@@ -142,12 +142,14 @@ def _headers(cfg_obj: dict) -> dict:
 
 
 def chat(prompt: str, system: str = "", json_mode: bool = False,
-         schema: dict | None = None, think: bool | None = None) -> str:
+         schema: dict | None = None, think: bool | None = None,
+         queue_timeout: float | None = None) -> str:
     """调用模型，返回文本。失败抛 LLMUnavailable。
 
     schema: 传入 JSON Schema 时使用「结构化输出」约束解码，模型输出必然符合该结构，
             比 json_mode=True（仅保证是合法 JSON）稳定得多。
     think:  覆盖配置中的思考链开关，用于消融实验对比。
+    queue_timeout: 单次请求的排队上限，None 表示用全局配置（公网匿名入口会调短）。
     """
     cfg = current_app.config
     ch = channel.resolve()
@@ -185,7 +187,7 @@ def chat(prompt: str, system: str = "", json_mode: bool = False,
     t0 = time.perf_counter()
     for i in range(attempts):
         try:
-            with gate.slot():
+            with gate.slot(timeout=queue_timeout):
                 r = sess.post(_endpoint(ch, "/api/chat"), json=payload,
                               headers=_headers(ch), timeout=ch["timeout"],
                               proxies=_proxies(ch))

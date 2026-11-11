@@ -154,10 +154,11 @@ def main():
     check("解除限流后正常登录", r.status_code == 302, r.status_code)
 
     # ---------------------------------------------------------------- 4b
-    print("\n[4b] 代理环境下 IP 每次变化，限流仍必须生效")
+    print("\n[4b] 代理/伪造 XFF 不能绕过限流，账号维度是主约束")
     # 线上实测：托管环境的每个请求 X-Forwarded-For 都不同（代理出口 IP 池），
     # 按「IP|账号」计数永远都是"第 1 次"，限流形同虚设。
-    # 这里用逐次变化的 XFF 复现该环境，验证账号维度确实兜住了。
+    # 现在代码已不再采信 XFF（只认 ProxyFix 归一的 remote_addr，见 security_hard ⑧），
+    # 这里继续验证：无论请求头怎么变，账号维度都会在 5 次后锁定。
     auth_mod._LOGIN_FAIL.clear()
     c = app.test_client()
     codes = []

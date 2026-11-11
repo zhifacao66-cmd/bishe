@@ -104,6 +104,16 @@ def push(order, action, actor="", actor_id=None, actor_org="", detail="", at=Non
     order.status = to_status
     db.session.add(log)
 
+    # 工单状态变了，关联居民诉求的缓存状态也要跟着变。
+    # 放在 push() 里而不是各 API：这是全站唯一的状态变更入口，
+    # 新增动作（批量办结、裁决）不会再漏一次回写。没有关联居民单时是一次空查询。
+    if order.work_item_id:
+        from app.itemstate import sync_ticket_status
+        from app.models import WorkItem
+        wi = db.session.get(WorkItem, order.work_item_id)
+        if wi and wi.fde_id:
+            sync_ticket_status(wi.fde_id)
+
     from app import evidence
     payload = {
         "order_no": order.order_no,

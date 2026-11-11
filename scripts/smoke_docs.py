@@ -187,6 +187,20 @@ comm.post(f"/api/docs/{d3}/check", json={})
 r = comm.post(f"/api/docs/{d3}/reject", json={})
 check("退回 → 回到草稿", r.status_code == 200 and r.get_json()["data"]["doc_status"] == "draft")
 
+# 搜索词里的 % / _ 必须当字面量，不能退化成 LIKE 通配符把全表捞出来
+all_n = len(comm.get("/api/docs?size=200").get_json()["data"]["items"])
+r = mk(title="含百分号 100% 的函", doc_type="函", to_org="幸福里街道办事处")
+check("含百分号的公文可建", r.status_code == 200)
+r = comm.get("/api/docs?size=200&q=%25")
+items = r.get_json()["data"]["items"]
+check("搜 % 不返回全表", len(items) < all_n, f"{len(items)} / {all_n}")
+check("搜 % 只命中真含百分号的件", all("%" in x["title"] for x in items),
+      [x["title"] for x in items])
+r = comm.get("/api/docs?size=200&q=_")
+check("搜 _ 只按字面量匹配",
+      all("_" in x["title"] for x in r.get_json()["data"]["items"]),
+      [x["title"] for x in r.get_json()["data"]["items"]])
+
 print("=" * 66)
 print("④ 密级与角色可见性")
 print("=" * 66)

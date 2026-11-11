@@ -86,6 +86,8 @@ def run_one(path):
     env = dict(os.environ)
     env["no_proxy"] = "127.0.0.1,localhost"
     env["NO_PROXY"] = "127.0.0.1,localhost"
+    # 各套件的子进程统一 UTF-8 输出，避免 cp936 控制台下中文断言假失败
+    env["PYTHONIOENCODING"] = "utf-8"
     try:
         p = subprocess.run(
             [sys.executable, "-X", "utf8", path],

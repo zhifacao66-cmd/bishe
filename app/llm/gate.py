@@ -100,15 +100,21 @@ class LLMGate:
             return time.monotonic() - min(self._active.values())
 
     @contextmanager
-    def slot(self):
+    def slot(self, timeout: float | None = None):
+        """取一个模型槽位。
+
+        `timeout` 是**单次请求**的排队上限；不传才用全局 LLM_QUEUE_TIMEOUT。
+        公网匿名入口会传更短的值：居民不值得为一个规则兜底也能办的事等 40 秒。
+        """
         sem = self._sem
         if sem is None:                       # 未 configure 时退化为不限流
             yield
             return
+        effective = self.queue_timeout if timeout is None else max(0.0, float(timeout))
         t0 = time.perf_counter()
         with self._stat_lock:
             self.waiting += 1
-        acquired = sem.acquire(timeout=self.queue_timeout)
+        acquired = sem.acquire(timeout=effective)
         wait = time.perf_counter() - t0
         with self._stat_lock:
             self.waiting -= 1
@@ -123,7 +129,7 @@ class LLMGate:
                 acquired = sem.acquire(timeout=1.0)
             if not acquired:
                 raise QueueTimeout(
-                    f"本地模型排队超时（>{self.queue_timeout:.0f}s，并发上限 {self.limit}）"
+                    f"本地模型排队超时（>{effective:.0f}s，并发上限 {self.limit}）"
                 )
         with self._stat_lock:
             self._seq += 1

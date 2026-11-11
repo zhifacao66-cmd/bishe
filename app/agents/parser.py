@@ -111,10 +111,13 @@ class ParserAgent(BaseAgent):
 
     def run(self, payload: dict) -> dict:
         text = payload["raw_text"]
+        # 只有公网匿名入口会传更短的排队上限；内部入口保持全局 LLM_QUEUE_TIMEOUT
+        queue_timeout = payload.get("queue_timeout")
         source = "llm"
         try:
             kw = {"schema": SCHEMA} if self.use_schema else {"json_mode": True}
-            out = chat(text, system=SYSTEM, think=self.think, **kw)
+            out = chat(text, system=SYSTEM, think=self.think, **kw,
+                       queue_timeout=queue_timeout)
             items = self._normalize(self._loads(out))
             # 预分句校验：并列词切出的子句数 > 输出项数 → 疑似漏拆，带提示重试一次
             if self.use_retry:
@@ -127,7 +130,7 @@ class ParserAgent(BaseAgent):
                         + f"。你必须输出 {len(segs)} 个业务项，逐条对应，不得合并。"
                     )
                     out2 = chat(text, system=SYSTEM + "\n\n" + hint,
-                                think=self.think, **kw)
+                                think=self.think, queue_timeout=queue_timeout, **kw)
                     items2 = self._normalize(self._loads(out2))
                     if len(items2) > len(items):
                         items = items2

@@ -374,7 +374,11 @@ def main(limit=None):
         audit_total = AuditLog.query.count()
 
     # 报表一致性
-    rep = c.post("/api/reports/generate", json={"period": "2026-10"}).get_json()
+    # 周期取当前月，不能写死：这套评测在 2026-10 写死过 "2026-10"，
+    # 跨月再跑时报表按自然月过滤 → 永远 0/0/0，看起来像"报表口径不一致"，
+    # 实际是评测脚本把查询周期写在了过去。
+    period = time.strftime("%Y-%m")
+    rep = c.post("/api/reports/generate", json={"period": period}).get_json()
     rep_data = rep.get("data", {}) if rep.get("code") == 0 else {}
 
     op_, orr_, of_ = prf(order_tp, order_fp, order_fn)

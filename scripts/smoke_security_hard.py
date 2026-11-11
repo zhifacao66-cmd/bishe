@@ -3,7 +3,7 @@
 对应的体检脚本是 `scripts/sec_probe.py`（打印现状，不预设结论）；
 这里是同一批结论的断言版——**修一次不够，边界要靠断言守住**。
 
-覆盖 7 类：
+覆盖 8 类：
   ① 安全响应头（nosniff / 防点击劫持 / Referrer / CSP / 不报框架版本）
   ② /api/health 分档（匿名只给存活状态）
   ③ 公告 scope 越权（物业按 id 直取社区内部件、草稿、导出）
@@ -11,6 +11,7 @@
   ⑤ 自助注册限流（公网写入口不能被灌库）
   ⑥ https 下 Cookie 带 Secure
   ⑦ 导出留痕 + 存储型 XSS 的输出转义
+  ⑧ 公网入口 P0：不采信 XFF / 限流与越权回真实 HTTP 码 / 全局提交闸
 
 独立库 + 模型指向不可用端口，不依赖 GPU、不碰真实数据。
 """
@@ -18,6 +19,7 @@ import json
 import os
 import pathlib
 import sys
+import time
 
 BASE = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE))
@@ -34,6 +36,7 @@ os.environ["NOTICE_AUTO_IMPORT"] = "0"
 
 from app import create_app                                     # noqa: E402
 from app import auth as auth_mod                               # noqa: E402
+from app import ratelimit                                      # noqa: E402
 from app.extensions import db                                  # noqa: E402
 from app.models import (AuditLog, Notice, Report,              # noqa: E402
                         ResidentTicket, User)
@@ -315,6 +318,55 @@ with app.test_client() as c:
     body = json.dumps((c.get("/api/audit").get_json() or {}), ensure_ascii=False)
     check("审计接口不回 HTML 页面（JSON 才是对的）",
           body.strip().startswith("{"), body[:40])
+
+# ================================================================ ⑧ 公网入口 P0
+print("\n[⑧] 公网入口：可信 IP / 状态码 / 全局提交闸")
+from app.api.portal import _client_ip as portal_ip              # noqa: E402
+from app.auth import _client_ip as auth_ip                      # noqa: E402
+
+with app.test_request_context(
+        "/", headers={"X-Forwarded-For": "203.0.113.9"},
+        environ_base={"REMOTE_ADDR": "127.0.0.1"}):
+    check("portal 不采信 XFF（只读 remote_addr）",
+          portal_ip() == "127.0.0.1", portal_ip())
+    check("auth 不采信 XFF（只读 remote_addr）",
+          auth_ip() == "127.0.0.1", auth_ip())
+
+with app.test_client() as c:
+    ratelimit.reset()
+    r = c.post("/api/portal/report", json={"phone": "123", "text": "x"})
+    check("非法手机号 → HTTP 400", r.status_code == 400, r.status_code)
+    # 同一手机号第 6 次在入参校验前就被限流挡下，返回真实 429，
+    # 不再用 200 把"被限流"伪装成"处理成功"。
+    for _ in range(5):
+        c.post("/api/portal/report", json={"phone": "123", "text": "x"})
+    r = c.post("/api/portal/report", json={"phone": "123", "text": "x"})
+    check("手机号维度超限 → HTTP 429", r.status_code == 429, r.status_code)
+    r = c.get("/api/portal/ticket/999999")
+    check("不存在的单据 → HTTP 404", r.status_code == 404, r.status_code)
+
+    # 全局闸是"维度限流之外"的最后一层：直接占满窗口，验证 31 次必被拒
+    ratelimit.reset()
+    with ratelimit._LOCK:
+        ratelimit._BUCKET["report:global"] = [time.time()] * 30
+    r = c.post("/api/portal/report",
+               json={"phone": "13800138000", "text": "楼道灯坏了"})
+    check("全局提交闸超限 → HTTP 429", r.status_code == 429, r.status_code)
+    ratelimit.reset()
+
+    # 并发准入：4 个槽位占满后第 5 个请求必须立即 429，而不是排进模型队列
+    from app.api import portal as portal_mod
+    ratelimit.reset()
+    for _ in range(4):
+        portal_mod._REPORT_SLOTS.acquire()
+    try:
+        r = c.post("/api/portal/report",
+                   json={"phone": "13800138000", "text": "楼道灯坏了"})
+        check("公网并发槽位占满 → HTTP 429", r.status_code == 429, r.status_code)
+    finally:
+        for _ in range(4):
+            portal_mod._REPORT_SLOTS.release()
+    ratelimit.reset()
 
 print("\n" + "=" * 66)
 print(f"合计 {PASS + FAIL} 项，通过 {PASS}，失败 {FAIL}")

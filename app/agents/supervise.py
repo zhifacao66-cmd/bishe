@@ -8,9 +8,10 @@
 """
 from datetime import datetime, timedelta
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.agents.base import BaseAgent
+from app.extensions import db
 from app.models import Task, WorkOrder
 
 
@@ -74,3 +75,32 @@ class SuperviseAgent(BaseAgent):
     def is_overdue(order) -> bool:
         return (order.status != "done"
                 and datetime.now() > order.created_at + timedelta(hours=order.sla_hours or 24))
+
+    @staticmethod
+    def overdue_condition(model, now=None):
+        """`is_overdue` 的 SQL 版，口径同源。
+
+        为什么要有两份：告警扫描需要整行（订单号、内容、逾期小时数），
+        列表页的"超期数"只需要 count。早先列表页用 `.all()` 把每个未结单
+        都实例化成 ORM 对象再逐条比时间；量级到几千时，每刷一次列表都 hydrate
+        几千行。这里把同一个判据下推成 SQL，只查不同 SLA 档位，再 count。
+        """
+        now = now or datetime.now()
+        hours = {24}                       # `sla_hours or 24` 的兜底档
+        for (h,) in (db.session.query(model.sla_hours)
+                     .filter(model.sla_hours.isnot(None)).distinct().all()):
+            try:
+                h = int(h)
+            except (TypeError, ValueError):
+                continue
+            if h > 0:
+                hours.add(h)
+        conds = [((model.sla_hours == h)
+                  & (model.created_at < now - timedelta(hours=h)))
+                 for h in sorted(hours)]
+        # is_overdue 用 `sla_hours or 24`：0/负数/NULL 都按 24h。
+        conds.append(((model.sla_hours <= 0)
+                      & (model.created_at < now - timedelta(hours=24))))
+        conds.append((model.sla_hours.is_(None)
+                      & (model.created_at < now - timedelta(hours=24))))
+        return (func.coalesce(model.status, "open") != "done") & or_(*conds)

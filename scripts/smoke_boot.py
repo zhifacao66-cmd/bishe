@@ -68,6 +68,9 @@ def run(db_path):
     env = dict(os.environ)
     env["DATABASE_URL"] = "sqlite:///" + str(db_path)
     env["NOTICE_AUTO_IMPORT"] = "0"
+    # 子进程用 UTF-8 输出：Windows 默认 cp936 时，ensure_ascii=False 的中文
+    # 会被父进程按 UTF-8 解码成乱码，导致"健康页记得自愈"假失败。
+    env["PYTHONIOENCODING"] = "utf-8"
     env.pop("LLM_BASE_URL", None)
     p = subprocess.run([sys.executable, "-c", CHILD], cwd=str(BASE), env=env,
                        capture_output=True, text=True, encoding="utf-8",

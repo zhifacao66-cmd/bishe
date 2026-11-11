@@ -63,7 +63,7 @@ class Orchestrator:
     # ------------------------------------------------------------------ 主链路
 
     def handle_fde(self, raw_text: str, source: str = "text", creator: str = "",
-                   run_id: str = "") -> dict:
+                   run_id: str = "", queue_timeout: float | None = None) -> dict:
         bb = Blackboard(run_id)
 
         # ① 保密审查（先脱敏再入库/入模型，最小暴露）
@@ -87,7 +87,8 @@ class Orchestrator:
 
         # ③ 拆解（调模型，约 2s，必须在事务外）
         t = time.perf_counter()
-        parsed = self.parser.run({"raw_text": sec["masked_text"]})
+        parsed = self.parser.run({"raw_text": sec["masked_text"],
+                                  "queue_timeout": queue_timeout})
         degraded = parsed["source"] != "llm"
         bb.step("parser", "parse",
                 decision=f"拆出 {len(parsed['items'])} 个业务项",

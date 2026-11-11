@@ -206,11 +206,10 @@ def list_orders():
     counts = dict(base.with_entities(WorkOrder.status, func.count(WorkOrder.id))
                   .group_by(WorkOrder.status).all())
     total = sum(counts.values())
-    # 超期是"未办结且已过时限"。判定必须复用 SuperviseAgent.is_overdue，
-    # 不能在这里另写一套时间比较——两套阈值迟早不一样，告警条和卡片就会打架。
-    # 只看未办结的，量级远小于全表。
-    overdue = sum(1 for o in base.filter(WorkOrder.status != "done").all()
-                  if SuperviseAgent.is_overdue(o))
+    # 超期是"未办结且已过时限"。判定复用 SuperviseAgent 的同一套口径，
+    # 但下推成 SQL count：早先把所有未结单 .all() 出来逐条比时间，量级上来后
+    # 每刷一次列表都要 hydrate 几千行。`overdue_condition` 只查 SLA 档位再 count。
+    overdue = base.filter(SuperviseAgent.overdue_condition(WorkOrder)).count()
     rm = _reject_map([o.id for o in orders])
 
     return ok({

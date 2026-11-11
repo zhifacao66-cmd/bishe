@@ -14,6 +14,7 @@ import hashlib
 import json
 import re
 import secrets
+import threading
 from datetime import datetime, timedelta
 
 from flask import Blueprint, current_app, request, session
@@ -22,7 +23,7 @@ from app.api import fail, ok
 from app.auth import ROLE_NAMES
 from app import arbitration, evidence
 from app.extensions import db
-from app.itemstate import STAGE_RESIDENT, stage as item_stage
+from app.itemstate import STAGE_RESIDENT, stage as item_stage, sync_ticket_status
 from app.models import (AuditLog, EvidenceChain, FdeRecord, Ledger, Notice,
                         ResidentTicket, WorkItem, WorkOrder)
 from app.ratelimit import allow as _rate_ok
@@ -52,6 +53,15 @@ LINE_TO_ORG = {
 QUERY_FAIL_MAX = 5
 QUERY_FAIL_WINDOW = 30 * 60          # 秒
 
+# 公网填报的硬闸：同时只允许 4 个匿名请求进入模型/落库链路。
+# 维度限流挡不住"换手机号 + 换 IP"的脚本，而 threaded=True 每请求一个线程，
+# 没有这个闸，几百个请求会各自排队 40 秒，把 2C2G 机器的线程和内存吃满。
+# 拿不到槽位立即 429，不排队——居民端宁可快速失败，也不占着连接干等。
+_REPORT_SLOTS = threading.BoundedSemaphore(4)
+# 匿名请求的模型排队上限：社区内部可以等 40 秒，居民提交不值得等那么久，
+# 8 秒拿不到模型就直接走规则兜底，链路仍然完整。
+REPORT_QUEUE_TIMEOUT = 8.0
+
 
 def _phone_key(phone: str) -> str:
     """审计里的稳定键：手机号哈希，不落明文
@@ -80,8 +90,9 @@ def _note_query_fail(phone: str):
 
 
 def _client_ip() -> str:
-    fwd = request.headers.get("X-Forwarded-For", "")
-    return (fwd.split(",")[0].strip() if fwd else request.remote_addr) or "unknown"
+    # 只读 remote_addr：XFF 是客户端可伪造的，拿它做限流键等于没限。
+    # 反代部署时由 ProxyFix 把可信的那一段写进 remote_addr（见 config.TRUST_PROXY）。
+    return request.remote_addr or "unknown"
 
 
 def mask_phone(p: str) -> str:
@@ -103,8 +114,31 @@ def _remember(ticket_id: int):
     session["portal_tickets"] = ids[:10]
 
 
-def _ticket_payload(t: ResidentTicket) -> dict:
-    """组装居民可见的进度视图
+def _batch_load(tickets: list[ResidentTicket]):
+    """一次取齐多张单据的事项/工单/台账。
+
+    早先 `_ticket_payload` 每张票、每个事项各查一轮：一页 10 张票、每张拆 3 项，
+    就是 70 次查询。查询集中在写路径之后做一次批量取，渲染层只组装。
+    """
+    fde_ids = [t.fde_id for t in tickets if t.fde_id]
+    items_by_fde: dict[int, list] = {}
+    if fde_ids:
+        for it in (WorkItem.query.filter(WorkItem.fde_id.in_(fde_ids))
+                   .order_by(WorkItem.id.asc()).all()):
+            items_by_fde.setdefault(it.fde_id, []).append(it)
+    item_ids = [it.id for items in items_by_fde.values() for it in items]
+    orders_map: dict[int, list] = {}
+    filed_ids: set[int] = set()
+    if item_ids:
+        for o in WorkOrder.query.filter(WorkOrder.work_item_id.in_(item_ids)).all():
+            orders_map.setdefault(o.work_item_id, []).append(o)
+        filed_ids = {wid for (wid,) in db.session.query(Ledger.work_item_id)
+                     .filter(Ledger.work_item_id.in_(item_ids)).distinct().all()}
+    return items_by_fde, orders_map, filed_ids
+
+
+def _payload(t: ResidentTicket, items: list, orders_map: dict, filed_ids: set) -> dict:
+    """组装居民可见的进度视图。**只读**：渲染函数不写库、不 commit。
 
     状态判据已收口到 `app/itemstate.py`——居民端与首录台必须用同一套，
     否则同一个事项会出现"居民看到已办结、社区看到待派发"。
@@ -115,16 +149,16 @@ def _ticket_payload(t: ResidentTicket) -> dict:
     早先判据写成 `all(s == "done")`，这些事项永远到不了"已办结"——
     居民申请低保复核，社区早就归档了，居民端还显示"已受理"，
     等于告诉居民"没人管"。这不是显示问题，是状态语义错了。
+
+    状态回写只发生在写路径（建单、居民表态、工单流转），见 itemstate.sync_ticket_status。
     """
-    items = WorkItem.query.filter_by(fde_id=t.fde_id).all() if t.fde_id else []
     rows = []
 
     for it in items:
-        orders = WorkOrder.query.filter_by(work_item_id=it.id).all()
-        ledgers = Ledger.query.filter_by(work_item_id=it.id).all()
+        orders = orders_map.get(it.id, [])
         lines = [l for l in (it.target_lines or "").split(",") if l]
 
-        state = STAGE_RESIDENT[item_stage(it, orders=orders, filed=bool(ledgers))]
+        state = STAGE_RESIDENT[item_stage(it, orders=orders, filed=it.id in filed_ids)]
 
         orgs = [LINE_TO_ORG.get(l, l) for l in lines]
         sla = max([o.sla_hours for o in orders], default=None)
@@ -164,9 +198,6 @@ def _ticket_payload(t: ResidentTicket) -> dict:
         overall = "doing"
     else:
         overall = "open"
-    if t.status != overall:
-        t.status, t.updated_at = overall, datetime.now()
-        db.session.commit()
 
     # 整单层面的表态口径：全部事项都确认才算"已确认"。
     # 有一项不服就算"有争议"——宁可让居委会多看一条，也不能把
@@ -201,6 +232,17 @@ def _ticket_payload(t: ResidentTicket) -> dict:
     }
 
 
+def _ticket_payload(t: ResidentTicket) -> dict:
+    items_by_fde, orders_map, filed_ids = _batch_load([t])
+    return _payload(t, items_by_fde.get(t.fde_id, []), orders_map, filed_ids)
+
+
+def _ticket_payload_many(tickets: list[ResidentTicket]) -> list[dict]:
+    items_by_fde, orders_map, filed_ids = _batch_load(tickets)
+    return [_payload(t, items_by_fde.get(t.fde_id, []), orders_map, filed_ids)
+            for t in tickets]
+
+
 # ------------------------------------------------------------------ 居民填报
 
 @bp.post("/report")
@@ -211,27 +253,38 @@ def report():
     address = (data.get("address") or "").strip()[:64]
     text = (data.get("text") or "").strip()
 
-    # 双维度限流：手机号维度是真实约束（一条诉求对应一个人），
-    # IP 维度只做兜底——代理环境下 IP 既不稳定也可伪造，单独靠它挡不住刷单。
+    # 三档限流：手机号是真实约束（一条诉求对应一个人），IP 是兜底，
+    # 全局闸防"换手机号 + 换 IP"的脚本。全部在入参校验之前，
+    # 否则伪造一堆非法手机号就能无限试探。
+    if not _rate_ok("report:global", 30, 60):
+        return fail("系统当前提交繁忙，请稍后再试", 429), 429
     if not _rate_ok(f"report:phone:{phone}", 5, 60):
-        return fail("提交太频繁，请稍后再试（同一手机号每分钟最多 5 次）")
+        return fail("提交太频繁，请稍后再试（同一手机号每分钟最多 5 次）", 429), 429
     if not _rate_ok(f"report:ip:{_client_ip()}", 30, 60):
-        return fail("提交太频繁，请稍后再试")
+        return fail("提交太频繁，请稍后再试", 429), 429
 
     if not PHONE_RE.match(phone):
-        return fail("请填写 11 位手机号，用于接收处理结果")
+        return fail("请填写 11 位手机号，用于接收处理结果", 400), 400
     if len(text) < 5:
-        return fail("请把情况说清楚一些（至少 5 个字）")
+        return fail("请把情况说清楚一些（至少 5 个字）", 400), 400
     if len(text) > 2000:
-        return fail("内容过长，请控制在 2000 字以内")
+        return fail("内容过长，请控制在 2000 字以内", 400), 400
 
     # 居民身份不进 user 表，creator 只留可识别的痕迹（姓 + 手机尾号）
     label = f"居民{name[:1] + '某' if name else ''}(尾号{phone[-4:]})"
     from app.agents.orchestrator import Orchestrator
+    # 拿不到公网并发槽位立即拒绝，不进模型队列；拿到才允许调用。
+    if not _REPORT_SLOTS.acquire(blocking=False):
+        return fail("系统当前提交繁忙，请稍后再试", 429), 429
     try:
-        result = Orchestrator().handle_fde(text, source="portal", creator=label)
-    except Exception as e:
-        return fail(f"提交失败：{type(e).__name__}，请稍后重试或电话联系社区")
+        result = Orchestrator().handle_fde(
+            text, source="portal", creator=label,
+            queue_timeout=REPORT_QUEUE_TIMEOUT)
+    except Exception:                                   # noqa: BLE001
+        # 不把异常类名回给公网；细节交给全局错误记录器与审计
+        return fail("提交失败，请稍后重试或电话联系社区", 500), 500
+    finally:
+        _REPORT_SLOTS.release()
 
     lines = []
     for it in result["items"]:
@@ -249,6 +302,9 @@ def report():
     db.session.add(ticket)
     # 先 flush 拿 id：链记录的 target_id 要用，而它不允许为空。
     db.session.flush()
+    # 居民端状态只在写路径同步一次：有的业务项只写台账、已经算办结，
+    # 建单时就应当是"已办结"而不是先写 open 等下一次 GET 来校正。
+    sync_ticket_status(result["fde_id"])
 
     # 照片：存盘 + 每张算哈希进链。
     # 落盘失败不阻断提交——居民描述已经录进去了，因为"图没传上"让整单退回
@@ -302,40 +358,41 @@ def query_ticket():
     # 限流必须落在**手机号**维度上：查询码只有 6 位，真正的攻击是"知道手机号后枚举查询码"，
     # 而 IP 在反向代理后面既不稳定、又可被 X-Forwarded-For 伪造，按 IP 限等于没限。
     if not _rate_ok(f"query:phone:{phone}", 20, 60):
-        return fail("查询太频繁，请稍后再试（同一手机号每分钟最多 20 次）")
+        return fail("查询太频繁，请稍后再试（同一手机号每分钟最多 20 次）", 429), 429
     if not _rate_ok(f"query:ip:{_client_ip()}", 120, 60):
-        return fail("查询太频繁，请稍后再试")
+        return fail("查询太频繁，请稍后再试", 429), 429
     if not PHONE_RE.match(phone) or not re.match(r"^\d{6}$", code):
-        return fail("请填写手机号与 6 位查询码")
+        return fail("请填写手机号与 6 位查询码", 400), 400
     # 锁定检查放在格式校验之后：格式都不对的请求不该写审计、也不该占额度
     if _query_locked(phone):
-        return fail("该手机号查询码输错次数过多，已锁定 30 分钟，请稍后再试")
+        return fail("该手机号查询码输错次数过多，已锁定 30 分钟，请稍后再试", 429), 429
     t = ResidentTicket.query.filter_by(phone=phone, code=code).first()
     if not t:
         _note_query_fail(phone)
-        return fail("没有查到对应记录，请核对手机号与查询码")
+        return fail("没有查到对应记录，请核对手机号与查询码", 404), 404
     _remember(t.id)
     return ok(_ticket_payload(t))
 
 
 @bp.get("/my")
 def my_tickets():
-    out = []
-    for tid in session.get("portal_tickets", []):
-        t = db.session.get(ResidentTicket, tid)
-        if t:
-            p = _ticket_payload(t)
-            out.append({k: p[k] for k in ("id", "code", "created_at", "status",
-                                          "status_text", "line_summary")})
-    return ok({"tickets": out})
+    tickets = [t for t in (db.session.get(ResidentTicket, tid)
+                           for tid in session.get("portal_tickets", []))
+               if t]
+    views = _ticket_payload_many(tickets)
+    return ok({"tickets": [{k: p[k] for k in ("id", "code", "created_at", "status",
+                                              "status_text", "line_summary")}
+                           for p in views]})
 
 
 @bp.get("/ticket/<int:tid>")
 def ticket_detail(tid: int):
     t = db.session.get(ResidentTicket, tid)
+    if not t:
+        return fail("没有查到对应记录", 404), 404
     # 只允许看本会话提交过的单子，防止遍历 id 拿到别人的信息
-    if not t or tid not in session.get("portal_tickets", []):
-        return fail("无权查看该记录")
+    if tid not in session.get("portal_tickets", []):
+        return fail("无权查看该记录", 403), 403
     return ok(_ticket_payload(t))
 
 
@@ -360,7 +417,8 @@ def confirm_ticket(tid: int):
     okc, msg, n = arbitration.resident_confirm(
         t, do_ok, d.get("note") or "", d.get("dispute_type") or "")
     if not okc:
-        return fail(msg), 400
+        return fail(msg, 400), 400
+    sync_ticket_status(t.fde_id)
     db.session.commit()
     return ok({"affected": n, "msg": msg, "view": _ticket_payload(t)})
 

@@ -53,8 +53,8 @@ def register():
         # 同时"该账号已被占用"这句提示本身就是账号枚举工具。
         # 按 IP 限 5 次/小时（弱于按账号限，但注册阶段还没有账号可用）。
         from app.ratelimit import allow
-        ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-              or request.remote_addr or "unknown")
+        # 只读 remote_addr；XFF 可伪造。反代部署时由 ProxyFix 归一（TRUST_PROXY=1）
+        ip = request.remote_addr or "unknown"
         if not allow(f"register:{ip}", 5, 3600):
             return render_template("register.html", err="提交太频繁，请 1 小时后再试，"
                                    "或直接联系管理员开通账号",

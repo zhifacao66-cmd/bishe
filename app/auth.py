@@ -335,9 +335,13 @@ class AccountDisabled(Exception):
 
 
 def _client_ip() -> str:
-    """仅用于留痕与辅助限流，**不可**作为唯一安全依据（XFF 可伪造）"""
-    fwd = request.headers.get("X-Forwarded-For", "")
-    return (fwd.split(",")[0].strip() if fwd else request.remote_addr) or "unknown"
+    """当前请求的对端地址。
+
+    只读 `remote_addr`，不读 `X-Forwarded-For`：后者客户端可任意伪造，
+    拿它做限流键等于把限流交给攻击者。需要真实客户端 IP 时由部署层开
+    `TRUST_PROXY=1`，让 ProxyFix 把最近一层代理写入的值落到 remote_addr。
+    """
+    return request.remote_addr or "unknown"
 
 
 def _fails(key: str, window: int) -> list[float]:
@@ -605,7 +609,7 @@ def _migrate_report_table():
 
 
 def _migrate_audit_table():
-    """审计日志补 `(created_at, id)` 复合索引
+    """审计日志补两个索引：游标分页 + 查询码锁定计数
 
     审计改成游标分页后，每一页都是"按时间倒序取 limit 条"。
     没有索引时要全表排序后再丢前面的行，翻到深处越来越慢；
@@ -613,6 +617,10 @@ def _migrate_audit_table():
 
     索引列顺序不能反：`created_at` 在前才能直接满足 ORDER BY，
     `id` 在后用于同一秒内的边界定位。
+
+    第二个索引服务公网查询码锁定：每次查进度都要
+    `count(*) where actor=? and action=? and created_at>=?`，
+    `(actor, action, created_at)` 能把扫描锁到单个手机号的 30 分钟窗口。
     """
     from sqlalchemy import inspect, text
     insp = inspect(db.engine)
@@ -621,6 +629,9 @@ def _migrate_audit_table():
     try:
         db.session.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_audit_created_id ON audit_log(created_at, id)"))
+        db.session.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_audit_actor_action_time "
+            "ON audit_log(actor, action, created_at)"))
         db.session.commit()
     except Exception as e:                                  # noqa: BLE001
         db.session.rollback()

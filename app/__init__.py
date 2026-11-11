@@ -162,6 +162,12 @@ def create_app(env="dev"):
     app = Flask(__name__)
     app.config.from_object(config_map[env])
     app.permanent_session_lifetime = timedelta(hours=8)
+
+    # 只信任最近一层代理写入的 X-Forwarded-For/Proto。本机直连不设，
+    # 避免任何人自带一个 XFF 头就能改写限流键与审计里的来源 IP。
+    if app.config.get("TRUST_PROXY"):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=0)
     # 不刷新会话 cookie：默认每个响应都重发一次 Set-Cookie，除了让每个页面
     # 都多出几十字节的响应头，还会让浏览器对"带 Set-Cookie 的响应"缓存更保守，
     # 站内预取的 HTML 就复用不上。这里只在会话内容真变了（登录/退出）时才下发。

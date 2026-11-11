@@ -12,7 +12,6 @@
 from datetime import date, datetime
 
 from flask import Blueprint, request
-from sqlalchemy import or_
 
 from app.api import fail, ok
 from app.auth import current_user, perm_required
@@ -20,6 +19,7 @@ from app.docflow import (ACTIONS, DOC_TYPES, LABEL, SECRET_LEVELS, STATUS_LABEL,
                          direction_of, make_doc_no, push)
 from app.extensions import db
 from app.models import AuditLog, DocLog, Notice
+from app.search import like_all
 
 bp = Blueprint("docs", __name__)
 
@@ -112,9 +112,11 @@ def index():
         q = q.filter(Notice.doc_status == status)
     kw = (request.args.get("q") or "").strip()
     if kw:
-        like = f"%{kw}%"
-        q = q.filter(or_(Notice.title.like(like), Notice.doc_no.like(like),
-                         Notice.to_org.like(like)))
+        # 与工单/台账共用 like_all：% _ 当字面量并转义，多个词按 AND。
+        # 早先这里手拼 f"%{kw}%"：搜一个 % 就命中全表，和 docs/17 的搜索口径不一致。
+        cond = like_all([Notice.title, Notice.doc_no, Notice.to_org], kw)
+        if cond is not None:
+            q = q.filter(cond)
 
     total = q.count()
     page = _int_arg("page", 1, 10000)

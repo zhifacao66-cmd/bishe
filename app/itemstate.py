@@ -15,7 +15,10 @@
 `WorkItem.status` 不参与判断：全站没有任何一处写过它（创建时默认 pending，
 之后没人动），拿它当依据等于把"已完成"写成一个永远不成立的分支。
 """
-from app.models import Ledger, WorkOrder
+from datetime import datetime
+
+from app.extensions import db
+from app.models import Ledger, ResidentTicket, WorkItem, WorkOrder
 
 # 内部（首录台/工单中心）用：文案 + 徽标类名
 STAGE_STAFF = {
@@ -58,3 +61,48 @@ def stage(item, orders=None, filed=None) -> str:
     if "open" in states:
         return "open"
     return "pending"
+
+
+def _ticket_overall(fde_id: int) -> str:
+    """一整张居民诉求的进度：全部办结 / 有推进 / 未开始。
+
+    与 `portal._ticket_payload` 的展示口径同源，避免"页面显示已办结、
+    库里还是已受理"这类分析口径漂移。
+    """
+    items = WorkItem.query.filter_by(fde_id=fde_id).order_by(WorkItem.id.asc()).all()
+    if not items:
+        return "open"
+    item_ids = [it.id for it in items]
+    orders_map: dict[int, list] = {}
+    for o in WorkOrder.query.filter(WorkOrder.work_item_id.in_(item_ids)).all():
+        orders_map.setdefault(o.work_item_id, []).append(o)
+    filed_ids = {wid for (wid,) in db.session.query(Ledger.work_item_id)
+                 .filter(Ledger.work_item_id.in_(item_ids)).distinct().all()}
+    stages = [stage(it, orders=orders_map.get(it.id, []), filed=it.id in filed_ids)
+              for it in items]
+    if all(s == "done" for s in stages):
+        return "done"
+    if any(s not in ("open", "pending") for s in stages):
+        return "doing"
+    return "open"
+
+
+def sync_ticket_status(fde_id: int) -> int:
+    """把居民单状态回写到 `resident_ticket.status`，返回实际变化的条数。
+
+    只在**写路径**调用（建单、居民表态、工单流转），渲染函数不再 commit：
+    GET 有副作用会让预取/重试/爬虫都产生写，还会和 SQLite 的写锁抢。
+    """
+    if not fde_id:
+        return 0
+    tickets = ResidentTicket.query.filter_by(fde_id=fde_id).all()
+    if not tickets:
+        return 0
+    overall = _ticket_overall(fde_id)
+    changed = 0
+    for t in tickets:
+        if (t.status or "") != overall:
+            t.status = overall
+            t.updated_at = datetime.now()
+            changed += 1
+    return changed

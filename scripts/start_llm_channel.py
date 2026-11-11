@@ -14,6 +14,9 @@
     python scripts/start_llm_channel.py          # 起通道并写入配置
     python scripts/start_llm_channel.py --show   # 只看当前配置，不起进程
     python scripts/start_llm_channel.py --push-ecs   # 起通道 + 自动推到阿里云 ECS
+    python scripts/start_llm_channel.py --skip-probe --push-ecs
+        # 本机 DNS 解析不了 *.trycloudflare.com 时用：跳过本机自探，
+        # 由 ECS 侧 /api/health 做最终验证。只在明确知道 DNS 有问题时用。
 
 线上现在是阿里云 ECS（http://47.108.235.113），它没有显卡，推理靠这条通道回本机。
 换隧道后必须把新地址推给服务器，否则线上会静默指向死地址：接口全 200、业务不报错，
@@ -174,6 +177,8 @@ def main():
 
     # 起通道后顺带把新地址推给阿里云 ECS（换隧道不推 = 线上静默降级）
     push_ecs = "--push-ecs" in sys.argv
+    # 本机 DNS 不可用时的逃生口：跳过本机自探，最终以 ECS 侧健康检查为准
+    skip_probe = "--skip-probe" in sys.argv
 
     if not os.path.exists(CLOUDFLARED):
         print(f"缺少 {CLOUDFLARED}")
@@ -247,8 +252,12 @@ def main():
         token = ""
         if os.path.exists(TOKEN_FILE):
             token = open(TOKEN_FILE, encoding="utf-8").read().strip()
-        print("[3/4] 正在验证通道（首次访问要等 Cloudflare 建路由，通常 10~30 秒）…")
-        ok, detail = probe_channel(url, token)
+        if skip_probe:
+            print("[3/4] 跳过本机自探（--skip-probe），由 ECS 侧 /api/health 做最终验证…")
+            ok, detail = True, ["(skipped)"]
+        else:
+            print("[3/4] 正在验证通道（首次访问要等 Cloudflare 建路由，通常 10~30 秒）…")
+            ok, detail = probe_channel(url, token)
         if not ok:
             print(f"[4/4] 验证没通过：{detail}")
             print("      配置**未改动**——宁可继续用旧地址，也不能把线上写到错地址上。")
@@ -267,11 +276,11 @@ def main():
         if push_ecs:
             print("\n[ECS] 把新地址推到阿里云服务器（只换 llm.json，绝不动 data\\）…")
             print("      链路一次只许连一次，22 端口约 50% 丢包，慢是正常的。")
-            rc = subprocess.call(
-                [sys.executable, "-X", "utf8",
-                 os.path.join(ROOT, "scripts", "ecs_push_llm.py")],
-                cwd=ROOT,
-            )
+            cmd = [sys.executable, "-X", "utf8",
+                   os.path.join(ROOT, "scripts", "ecs_push_llm.py")]
+            if skip_probe:
+                cmd.append("--skip-probe")
+            rc = subprocess.call(cmd, cwd=ROOT)
             if rc == 0:
                 print("[ECS] 推送完成，服务器已指向本机模型（/api/health 应为 ok）")
             else:

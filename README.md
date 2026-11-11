@@ -115,7 +115,7 @@ bise4/
 ├─ 启动系统.bat        # 一键启动（菜单：启动/自检/灌数据/停止）
 ├─ 停止系统.bat        # 停止服务
 ├─ data/               # community.db / kb 知识库 / **notices 上级文件投递口** / 实验 JSON
-├─ docs/               # 00~36 设计与实验文档（口径、踩坑、审查记录）
+├─ docs/               # 00~38 设计与实验文档（口径、踩坑、审查记录）
 └─ scripts/            # 启动自检、评测、压测、长稳、种子、出图脚本
 ```
 
@@ -241,6 +241,8 @@ python run.py                           # http://127.0.0.1:5000
 | `SQLITE_WAL` | `1` | WAL 模式；关掉后读写互斥，吞吐 −62% |
 | `SQLITE_BUSY_TIMEOUT` | `20000` | 写锁等待（毫秒） |
 | `APP_PORT` / `APP_HOST` | `5000` / `127.0.0.1` | 压测脚本会用 `APP_PORT` 拉起独立实例 |
+| `TRUST_PROXY` | `0` | 反代部署（nginx / ECS / 沙箱）设 `1`，由 ProxyFix 只信任最近一层代理写入的 `X-Forwarded-*`；本机直连不要开 |
+| `SESSION_COOKIE_SECURE` | `0` | HTTPS 部署时设 `1`，否则 Cookie 会明文过网 |
 | `KB_EMBED_MODEL` | 空 | 填 `bge-m3` 启用混合检索（需额外显存） |
 | `SECRET_KEY` | 开发占位值 | **生产必须换** |
 
@@ -261,7 +263,7 @@ python run.py                           # http://127.0.0.1:5000
 | `smoke_kb.py` | 知识库检索与问答（27 项断言） | `python scripts/smoke_kb.py` |
 | `smoke_portal.py` | 居民端 + 公告全链路（80 项断言） | `python scripts/smoke_portal.py` |
 | `smoke_security.py` | 越权 / 伪造 / 爆破 / Cookie（32 项） | `python scripts/smoke_security.py` |
-| `smoke_security_hard.py` | 安全加固：响应头 / 健康分档 / 公告 scope 越权 / 查询码锁定 / 注册限流 / Cookie Secure / 导出留痕 + 输出转义守卫（62 项） | `python scripts/smoke_security_hard.py` |
+| `smoke_security_hard.py` | 安全加固：响应头 / 健康分档 / 公告 scope 越权 / 查询码锁定 / 注册限流 / Cookie Secure / 导出留痕 + 输出转义守卫 + 公网入口可信 IP/状态码/提交闸（69 项） | `python scripts/smoke_security_hard.py` |
 | `smoke_admin.py` | 注册审核 + 建号 + 按人授权（71 项） | `python scripts/smoke_admin.py` |
 | `smoke_notice_flow.py` | 收文 → 签收 → 办结 → 办文 → 导出 → 发布（86 项） | `python scripts/smoke_notice_flow.py` |
 | `smoke_superior.py` | 上级单位账号 + 授权边界 + 督办视角（67 项） | `python scripts/smoke_superior.py` |
@@ -280,7 +282,15 @@ python run.py                           # http://127.0.0.1:5000
 | `smoke_llm_badge.py` | 侧栏状态灯是真的：模型不通必须红、通了才绿、隧道口径、接口/渲染都不许同步探活（19 项） | `python scripts/smoke_llm_badge.py` |
 | `smoke_boot.py` | 启动韧性：坏库自愈、无种子库降级启动、好库不误伤、`.reset_db` 幂等（18 项） | `python scripts/smoke_boot.py` |
 | `smoke_mobile.py` | 手机适配：抽屉三件套、12 张表都在滚动容器里、模板不许留行内跨栏栅格、统计卡用栅格类、iOS 16px 阈值、弹窗不许默认展开（51 项） | `python scripts/smoke_mobile.py` |
-| `smoke_logic.py` | 逻辑一致性：任务统计不受 limit 影响、任务写侧单位隔离、公告筛选是叠加不是替换、督办告警按身份收窄、台账归档算办结、两端置顶同键、老库回填幂等、管理员不被当成受派方（46 项） | `python scripts/smoke_logic.py` |
+| `smoke_logic.py` | 逻辑一致性：任务统计不受 limit 影响、任务写侧单位隔离、公告筛选是叠加不是替换、督办告警按身份收窄、台账归档算办结、两端置顶同键、老库回填幂等、管理员不被当成受派方、居民端 GET 只读（48 项） | `python scripts/smoke_logic.py` |
+| `smoke_arbitration.py` | 三方仲裁：驳回重办 / 维持办结 / 物业回避 / 裁决依据与统计口径（79 项） | `python scripts/smoke_arbitration.py` |
+| `smoke_collab.py` | Agent 协作：黑板冲突检测、更严者胜、轨迹落库与回放、权限（106 项） | `python scripts/smoke_collab.py` |
+| `smoke_dashboard.py` | 首页看板：每根柱子/每天/每个卡片都能对回一条 SQL（61 项） | `python scripts/smoke_dashboard.py` |
+| `smoke_docs.py` | 发文台 + 周报：状态机、密级、搜索通配符、报表同源（70 项） | `python scripts/smoke_docs.py` |
+| `smoke_ecs_sync.py` | 双端同步：快照、覆盖防呆、应用后状态一致（28 项） | `python scripts/smoke_ecs_sync.py` |
+| `smoke_frontend.py` | 前端请求入口、模板转义、公告分页与运行时检查（53 项） | `python scripts/smoke_frontend.py` |
+| `smoke_insight.py` | 流程监控 + 长尾风险：停留时长、风险拆项、投诉聚类（107 项） | `python scripts/smoke_insight.py` |
+| `smoke_policy.py` | ABAC R1–R7：密级上限、行级收窄、规则现场试算（88 项） | `python scripts/smoke_policy.py` |
 | `audit_probe.py` | 边界体检：空值 / 超长 / 类型错 / 越权 / 非法状态 / 分页边界（人工看报告，非断言） | `python scripts/audit_probe.py` |
 | `sec_probe.py` | 信息安全体检：安全头 / 健康暴露 / 公告越权 / 查询码锁定 / 注册限流 / Cookie / 导出留痕 / 跨站写（打印现状，不预设结论） | `python scripts/sec_probe.py` |
 | `check_integrity.py` | 数据层自洽：检索文本↔正文、工单状态↔流转链、办结时间、置顶时间、签收人、任务闭环时间、报表版本↔历史、居民单状态↔明细（只读，查副本） | `python scripts/check_integrity.py` |
@@ -363,6 +373,8 @@ python scripts\backup_db.py     :: 先留一份可恢复的快照，再动别的
 | `docs/34-Agent协作与冲突消解.md` | 黑板模型、真冲突判定与消解、"更严者胜"的取舍 |
 | `docs/35-人员底册与真实台账接入.md` | 台账导入、地址精度分级、反查与派单联动、合成数据边界 |
 | `docs/36-代码审查-性能与安全.md` | 性能与安全隐患分级、同步模型调用、代理头采信、状态码语义 |
+| `docs/37-公网入口安全加固（第一稿）.md` | P0 1~4 的修复：公网提交三层闸门、ProxyFix 可信 IP、GET 去写库、真实 429/403/404；含验证与残余边界 |
+| `docs/38-整体逻辑复查与P1修复.md` | 发文搜索通配符、超期统计下推 SQL、审计锁定索引、跨月评测假失败；34 套 1973 项与端到端复跑记录 |
 | `docs/img/` | 论文用图（`fig1~4` 架构/时序/协作/减负，`fig7_*` 并发与长稳） |
 
 ---
